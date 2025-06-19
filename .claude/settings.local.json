@@ -4,7 +4,10 @@
       "Bash(mkdir:*)",
       "Bash(go mod init:*)",
       "Bash(go test:*)",
-      "Bash(go fmt:*)"
+      "Bash(go fmt:*)",
+      "Bash(go build:*)",
+      "Bash(./bin/review-agent:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }
