@@ -332,3 +332,68 @@ func TestClaudeDeletionClient_DefaultConfiguration(t *testing.T) {
 		t.Errorf("Expected default temperature %f, got %f", DefaultDeletionTemperature, client.temperature)
 	}
 }
+
+func TestMaskAPIKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		apiKey   string
+		expected string
+	}{
+		{
+			name:     "normal API key",
+			apiKey:   "sk-ant-api03-1234567890abcdefghijklmnopqrstuvwxyz",
+			expected: "sk-a...wxyz",
+		},
+		{
+			name:     "short API key",
+			apiKey:   "sk-123",
+			expected: "***",
+		},
+		{
+			name:     "empty API key",
+			apiKey:   "",
+			expected: "***",
+		},
+		{
+			name:     "exactly 8 chars",
+			apiKey:   "12345678",
+			expected: "***",
+		},
+		{
+			name:     "9 chars shows masked",
+			apiKey:   "123456789",
+			expected: "1234...6789",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := maskAPIKey(tt.apiKey)
+			if result != tt.expected {
+				t.Errorf("maskAPIKey(%q) = %q, want %q", tt.apiKey, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestClaudeDeletionClient_String(t *testing.T) {
+	client := &ClaudeDeletionClient{
+		apiKey:      "sk-ant-api03-verysecretkey123456789",
+		model:       "claude-3-opus",
+		maxTokens:   4000,
+		temperature: 0.1,
+		baseURL:     "https://api.anthropic.com",
+	}
+
+	str := client.String()
+	
+	// Check that the string representation contains masked API key
+	if !strings.Contains(str, "sk-a...6789") {
+		t.Errorf("String() should mask the API key, got: %s", str)
+	}
+	
+	// Ensure the actual API key is not exposed
+	if strings.Contains(str, "verysecretkey") {
+		t.Errorf("String() exposed the API key: %s", str)
+	}
+}

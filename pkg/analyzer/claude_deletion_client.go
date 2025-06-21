@@ -126,6 +126,20 @@ func NewClaudeDeletionClient(config ClaudeDeletionConfig) (*ClaudeDeletionClient
 	}, nil
 }
 
+// maskAPIKey returns a masked version of the API key for logging
+func maskAPIKey(apiKey string) string {
+	if len(apiKey) <= 8 {
+		return "***"
+	}
+	return apiKey[:4] + "..." + apiKey[len(apiKey)-4:]
+}
+
+// String implements the Stringer interface to prevent accidental API key exposure
+func (c *ClaudeDeletionClient) String() string {
+	return fmt.Sprintf("ClaudeDeletionClient{model: %s, apiKey: %s, maxTokens: %d, temperature: %.2f, baseURL: %s}",
+		c.model, maskAPIKey(c.apiKey), c.maxTokens, c.temperature, c.baseURL)
+}
+
 // AnalyzeDeletions implements the LLMClient interface for deletion analysis
 func (c *ClaudeDeletionClient) AnalyzeDeletions(ctx context.Context, aiContext *AIAnalysisContext) (*DeletionAnalysisResult, error) {
 	// Combine all context into the user prompt
@@ -280,9 +294,9 @@ func (c *ClaudeDeletionClient) handleHTTPError(statusCode int, body []byte) erro
 	case 400:
 		return fmt.Errorf("bad request: %s", errResp.Error.Message)
 	case 401:
-		return fmt.Errorf("authentication failed: %s", errResp.Error.Message)
+		return fmt.Errorf("authentication failed (check API key): %s", errResp.Error.Message)
 	case 403:
-		return fmt.Errorf("forbidden: %s", errResp.Error.Message)
+		return fmt.Errorf("forbidden (check API permissions): %s", errResp.Error.Message)
 	case 429:
 		return fmt.Errorf("rate limit exceeded: %s", errResp.Error.Message)
 	case 500, 502, 503:
