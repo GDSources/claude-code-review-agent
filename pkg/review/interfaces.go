@@ -51,10 +51,23 @@ type CodeAnalyzer interface {
 	ExtractContext(parsedDiff *analyzer.ParsedDiff, contextLines int) (*analyzer.ContextualDiff, error)
 }
 
+// DeletionAnalyzer analyzes code deletions for orphaned references
+type DeletionAnalyzer interface {
+	AnalyzeDeletions(request *analyzer.DeletionAnalysisRequest) (*analyzer.DeletionAnalysisResult, error)
+}
+
+// CodebaseFlattener flattens codebase for AI analysis
+type CodebaseFlattener interface {
+	FlattenWorkspace(workspacePath string) (*analyzer.FlattenedCodebase, error)
+	FlattenDiff(workspacePath string, diff *analyzer.ParsedDiff) (*analyzer.FlattenedCodebase, error)
+}
+
 // ReviewData contains all information needed for LLM analysis
 type ReviewData struct {
-	Event          *PullRequestEvent        `json:"event"`
-	Workspace      *Workspace               `json:"workspace"`
-	DiffResult     *github.DiffResult       `json:"diff_result"`
-	ContextualDiff *analyzer.ContextualDiff `json:"contextual_diff"`
+	Event              *PullRequestEvent               `json:"event"`
+	Workspace          *Workspace                      `json:"workspace"`
+	DiffResult         *github.DiffResult              `json:"diff_result"`
+	ContextualDiff     *analyzer.ContextualDiff        `json:"contextual_diff"`
+	FlattenedCodebase  *analyzer.FlattenedCodebase     `json:"flattened_codebase,omitempty"`
+	DeletionAnalysis   *analyzer.DeletionAnalysisResult `json:"deletion_analysis,omitempty"`
 }

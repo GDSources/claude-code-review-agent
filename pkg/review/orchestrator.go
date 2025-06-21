@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/your-org/review-agent/pkg/analyzer"
 	"github.com/your-org/review-agent/pkg/github"
@@ -18,53 +19,76 @@ type GitHubCommentClient interface {
 }
 
 type DefaultReviewOrchestrator struct {
-	workspaceManager WorkspaceManager
-	diffFetcher      DiffFetcher
-	codeAnalyzer     CodeAnalyzer
-	llmClient        llm.CodeReviewer
-	githubClient     GitHubCommentClient
+	workspaceManager   WorkspaceManager
+	diffFetcher        DiffFetcher
+	codeAnalyzer       CodeAnalyzer
+	codebaseFlattener  CodebaseFlattener
+	deletionAnalyzer   DeletionAnalyzer
+	llmClient          llm.CodeReviewer
+	githubClient       GitHubCommentClient
 }
 
 func NewDefaultReviewOrchestrator(workspaceManager WorkspaceManager, diffFetcher DiffFetcher, codeAnalyzer CodeAnalyzer) *DefaultReviewOrchestrator {
 	return &DefaultReviewOrchestrator{
-		workspaceManager: workspaceManager,
-		diffFetcher:      diffFetcher,
-		codeAnalyzer:     codeAnalyzer,
-		llmClient:        nil,
-		githubClient:     nil,
+		workspaceManager:  workspaceManager,
+		diffFetcher:       diffFetcher,
+		codeAnalyzer:      codeAnalyzer,
+		codebaseFlattener: nil,
+		deletionAnalyzer:  nil,
+		llmClient:         nil,
+		githubClient:      nil,
 	}
 }
 
 // NewReviewOrchestratorWithLLM creates orchestrator with LLM integration
 func NewReviewOrchestratorWithLLM(workspaceManager WorkspaceManager, diffFetcher DiffFetcher, codeAnalyzer CodeAnalyzer, llmClient llm.CodeReviewer) *DefaultReviewOrchestrator {
 	return &DefaultReviewOrchestrator{
-		workspaceManager: workspaceManager,
-		diffFetcher:      diffFetcher,
-		codeAnalyzer:     codeAnalyzer,
-		llmClient:        llmClient,
-		githubClient:     nil,
+		workspaceManager:  workspaceManager,
+		diffFetcher:       diffFetcher,
+		codeAnalyzer:      codeAnalyzer,
+		codebaseFlattener: nil,
+		deletionAnalyzer:  nil,
+		llmClient:         llmClient,
+		githubClient:      nil,
 	}
 }
 
 // NewReviewOrchestratorWithComments creates orchestrator with LLM and comment posting
 func NewReviewOrchestratorWithComments(workspaceManager WorkspaceManager, diffFetcher DiffFetcher, codeAnalyzer CodeAnalyzer, llmClient llm.CodeReviewer, githubClient GitHubCommentClient) *DefaultReviewOrchestrator {
 	return &DefaultReviewOrchestrator{
-		workspaceManager: workspaceManager,
-		diffFetcher:      diffFetcher,
-		codeAnalyzer:     codeAnalyzer,
-		llmClient:        llmClient,
-		githubClient:     githubClient,
+		workspaceManager:  workspaceManager,
+		diffFetcher:       diffFetcher,
+		codeAnalyzer:      codeAnalyzer,
+		codebaseFlattener: nil,
+		deletionAnalyzer:  nil,
+		llmClient:         llmClient,
+		githubClient:      githubClient,
 	}
 }
 
 // NewDefaultReviewOrchestratorLegacy creates orchestrator without diff analysis (for backward compatibility)
 func NewDefaultReviewOrchestratorLegacy(workspaceManager WorkspaceManager) *DefaultReviewOrchestrator {
 	return &DefaultReviewOrchestrator{
-		workspaceManager: workspaceManager,
-		diffFetcher:      nil,
-		codeAnalyzer:     nil,
-		llmClient:        nil,
-		githubClient:     nil,
+		workspaceManager:  workspaceManager,
+		diffFetcher:       nil,
+		codeAnalyzer:      nil,
+		codebaseFlattener: nil,
+		deletionAnalyzer:  nil,
+		llmClient:         nil,
+		githubClient:      nil,
+	}
+}
+
+// NewReviewOrchestratorWithDeletionAnalysis creates orchestrator with deletion analysis capabilities
+func NewReviewOrchestratorWithDeletionAnalysis(workspaceManager WorkspaceManager, diffFetcher DiffFetcher, codeAnalyzer CodeAnalyzer, codebaseFlattener CodebaseFlattener, deletionAnalyzer DeletionAnalyzer, llmClient llm.CodeReviewer, githubClient GitHubCommentClient) *DefaultReviewOrchestrator {
+	return &DefaultReviewOrchestrator{
+		workspaceManager:  workspaceManager,
+		diffFetcher:       diffFetcher,
+		codeAnalyzer:      codeAnalyzer,
+		codebaseFlattener: codebaseFlattener,
+		deletionAnalyzer:  deletionAnalyzer,
+		llmClient:         llmClient,
+		githubClient:      githubClient,
 	}
 }
 
@@ -108,6 +132,14 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) e
 					Workspace:      workspace,
 					DiffResult:     diffResult,
 					ContextualDiff: contextualDiff,
+				}
+
+				// Perform deletion analysis if available
+				if r.codebaseFlattener != nil && r.deletionAnalyzer != nil {
+					err := r.performDeletionAnalysis(ctx, reviewData)
+					if err != nil {
+						log.Printf("Warning: deletion analysis failed for PR #%d: %v", event.Number, err)
+					}
 				}
 			}
 		}
@@ -177,6 +209,66 @@ func (r *DefaultReviewOrchestrator) analyzeDiff(diffResult *github.DiffResult) (
 	}
 
 	return contextualDiff, nil
+}
+
+// performDeletionAnalysis analyzes code deletions for orphaned references
+func (r *DefaultReviewOrchestrator) performDeletionAnalysis(ctx context.Context, reviewData *ReviewData) error {
+	if r.codebaseFlattener == nil || r.deletionAnalyzer == nil {
+		return fmt.Errorf("deletion analysis components not configured")
+	}
+
+	// Parse the diff to extract deleted content
+	parsedDiff, err := r.codeAnalyzer.ParseDiff(reviewData.DiffResult.RawDiff)
+	if err != nil {
+		return fmt.Errorf("failed to parse diff for deletion analysis: %w", err)
+	}
+
+	// Extract deleted content from the diff
+	deletedContent := extractDeletedContent(parsedDiff)
+	
+	// Only proceed if there are deletions
+	if len(deletedContent) == 0 {
+		log.Printf("No deletions found in PR #%d, skipping deletion analysis", reviewData.Event.Number)
+		return nil
+	}
+
+	log.Printf("Found %d code deletions in PR #%d, performing safety analysis", 
+		len(deletedContent), reviewData.Event.Number)
+
+	// Flatten the codebase for AI analysis
+	flattenedCodebase, err := r.codebaseFlattener.FlattenWorkspace(reviewData.Workspace.Path)
+	if err != nil {
+		return fmt.Errorf("failed to flatten codebase: %w", err)
+	}
+
+	log.Printf("Flattened codebase: %d files, %d lines for PR #%d", 
+		flattenedCodebase.TotalFiles, flattenedCodebase.TotalLines, reviewData.Event.Number)
+
+	// Create deletion analysis request
+	deletionRequest := &analyzer.DeletionAnalysisRequest{
+		Codebase:       flattenedCodebase,
+		DeletedContent: deletedContent,
+		Context:        fmt.Sprintf("PR #%d: %s", reviewData.Event.Number, reviewData.Event.PullRequest.Title),
+	}
+
+	// Perform deletion analysis
+	deletionResult, err := r.deletionAnalyzer.AnalyzeDeletions(deletionRequest)
+	if err != nil {
+		return fmt.Errorf("deletion analysis failed: %w", err)
+	}
+
+	// Store results in review data
+	reviewData.FlattenedCodebase = flattenedCodebase
+	reviewData.DeletionAnalysis = deletionResult
+
+	// Log results
+	log.Printf("Deletion analysis completed for PR #%d:", reviewData.Event.Number)
+	log.Printf("  - Orphaned references: %d", len(deletionResult.OrphanedReferences))
+	log.Printf("  - Safe deletions: %d", len(deletionResult.SafeDeletions))
+	log.Printf("  - Warnings: %d", len(deletionResult.Warnings))
+	log.Printf("  - Confidence: %.2f", deletionResult.Confidence)
+
+	return nil
 }
 
 // performLLMReview sends the review data to the LLM for analysis
@@ -290,4 +382,71 @@ func (r *DefaultReviewOrchestrator) postReviewComments(ctx context.Context, revi
 	}
 
 	return nil
+}
+
+// extractDeletedContent extracts deleted code from a parsed diff
+func extractDeletedContent(parsedDiff *analyzer.ParsedDiff) []analyzer.DeletedCode {
+	var deletedContent []analyzer.DeletedCode
+	
+	for _, file := range parsedDiff.Files {
+		if file.Status == "deleted" {
+			// Entire file was deleted
+			var content strings.Builder
+			var startLine, endLine int
+			
+			for _, hunk := range file.Hunks {
+				for _, line := range hunk.Lines {
+					if line.Type == "removed" {
+						if startLine == 0 {
+							startLine = line.OldLineNo
+						}
+						endLine = line.OldLineNo
+						content.WriteString(line.Content + "\n")
+					}
+				}
+			}
+			
+			if content.Len() > 0 {
+				deletedContent = append(deletedContent, analyzer.DeletedCode{
+					File:       file.Filename,
+					Content:    strings.TrimSuffix(content.String(), "\n"),
+					StartLine:  startLine,
+					EndLine:    endLine,
+					Language:   file.Language,
+					ChangeType: "deleted",
+				})
+			}
+		} else {
+			// File was modified, extract deleted sections
+			for _, hunk := range file.Hunks {
+				var content strings.Builder
+				var startLine, endLine int
+				var hasRemovedContent bool
+				
+				for _, line := range hunk.Lines {
+					if line.Type == "removed" {
+						if startLine == 0 {
+							startLine = line.OldLineNo
+						}
+						endLine = line.OldLineNo
+						content.WriteString(line.Content + "\n")
+						hasRemovedContent = true
+					}
+				}
+				
+				if hasRemovedContent {
+					deletedContent = append(deletedContent, analyzer.DeletedCode{
+						File:       file.Filename,
+						Content:    strings.TrimSuffix(content.String(), "\n"),
+						StartLine:  startLine,
+						EndLine:    endLine,
+						Language:   file.Language,
+						ChangeType: "deleted",
+					})
+				}
+			}
+		}
+	}
+	
+	return deletedContent
 }
