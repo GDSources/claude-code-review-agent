@@ -1,6 +1,7 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -56,6 +57,42 @@ type User struct {
 	Bio       string `json:"bio"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+}
+
+// PR Comment related structures
+
+// CreatePullRequestCommentRequest represents a request to create a PR comment
+type CreatePullRequestCommentRequest struct {
+	Body     string `json:"body"`
+	Path     string `json:"path"`
+	Line     int    `json:"line,omitempty"`
+	Side     string `json:"side,omitempty"`
+	CommitID string `json:"commit_id"`
+}
+
+// PullRequestComment represents a comment on a pull request
+type PullRequestComment struct {
+	ID        int64  `json:"id"`
+	Body      string `json:"body"`
+	Path      string `json:"path"`
+	Line      int    `json:"line,omitempty"`
+	Side      string `json:"side,omitempty"`
+	CommitID  string `json:"commit_id"`
+	User      User   `json:"user"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// CommentPostingResult represents the result of batch comment posting
+type CommentPostingResult struct {
+	SuccessfulComments []PullRequestComment  `json:"successful_comments"`
+	FailedComments     []FailedComment       `json:"failed_comments"`
+}
+
+// FailedComment represents a comment that failed to post
+type FailedComment struct {
+	Request CreatePullRequestCommentRequest `json:"request"`
+	Error   string                          `json:"error"`
 }
 
 func NewClient(token string) *Client {
@@ -330,4 +367,123 @@ func (c *Client) GetPullRequestDiffWithFiles(ctx context.Context, owner, repo st
 		RawDiff:    diff,
 		TotalFiles: len(files),
 	}, nil
+}
+
+// makeRequestWithBody makes an HTTP request with a JSON body
+func (c *Client) makeRequestWithBody(ctx context.Context, method, endpoint string, body interface{}) (*http.Response, error) {
+	url := c.baseURL + endpoint
+
+	var reqBody *bytes.Buffer
+	if body != nil {
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		}
+		reqBody = bytes.NewBuffer(jsonBody)
+	} else {
+		reqBody = bytes.NewBuffer(nil)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "review-agent/1.0")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		resp.Body.Close()
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+
+	return resp, nil
+}
+
+// CreatePullRequestComment creates a new comment on a pull request
+func (c *Client) CreatePullRequestComment(ctx context.Context, owner, repo string, prNumber int, comment CreatePullRequestCommentRequest) (*PullRequestComment, error) {
+	endpoint := fmt.Sprintf("/repos/%s/%s/pulls/%d/comments", owner, repo, prNumber)
+	
+	resp, err := c.makeRequestWithBody(ctx, "POST", endpoint, comment)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create PR comment: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var prComment PullRequestComment
+	if err := json.NewDecoder(resp.Body).Decode(&prComment); err != nil {
+		return nil, fmt.Errorf("failed to decode PR comment response: %w", err)
+	}
+
+	return &prComment, nil
+}
+
+// CreatePullRequestComments creates multiple comments on a pull request
+func (c *Client) CreatePullRequestComments(ctx context.Context, owner, repo string, prNumber int, comments []CreatePullRequestCommentRequest) (*CommentPostingResult, error) {
+	result := &CommentPostingResult{
+		SuccessfulComments: make([]PullRequestComment, 0),
+		FailedComments:     make([]FailedComment, 0),
+	}
+
+	for _, comment := range comments {
+		prComment, err := c.CreatePullRequestComment(ctx, owner, repo, prNumber, comment)
+		if err != nil {
+			result.FailedComments = append(result.FailedComments, FailedComment{
+				Request: comment,
+				Error:   err.Error(),
+			})
+		} else {
+			result.SuccessfulComments = append(result.SuccessfulComments, *prComment)
+		}
+	}
+
+	return result, nil
+}
+
+// GetPullRequestComments retrieves existing comments on a pull request
+func (c *Client) GetPullRequestComments(ctx context.Context, owner, repo string, prNumber int) ([]PullRequestComment, error) {
+	endpoint := fmt.Sprintf("/repos/%s/%s/pulls/%d/comments", owner, repo, prNumber)
+	
+	resp, err := c.makeRequest(ctx, "GET", endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR comments: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var comments []PullRequestComment
+	if err := json.NewDecoder(resp.Body).Decode(&comments); err != nil {
+		return nil, fmt.Errorf("failed to decode PR comments response: %w", err)
+	}
+
+	return comments, nil
+}
+
+// ReviewCommentInput represents input for creating a GitHub comment (avoids import cycle)
+type ReviewCommentInput struct {
+	Filename   string
+	LineNumber int
+	Comment    string
+}
+
+// ConvertReviewCommentToGitHub converts a ReviewCommentInput to GitHub API format
+func ConvertReviewCommentToGitHub(reviewComment ReviewCommentInput, commitID string) (CreatePullRequestCommentRequest, bool) {
+	// Skip comments without valid line numbers
+	if reviewComment.LineNumber <= 0 {
+		return CreatePullRequestCommentRequest{}, false
+	}
+
+	return CreatePullRequestCommentRequest{
+		Body:     reviewComment.Comment,
+		Path:     reviewComment.Filename,
+		Line:     reviewComment.LineNumber,
+		Side:     "RIGHT", // Always comment on the new version
+		CommitID: commitID,
+	}, true
 }

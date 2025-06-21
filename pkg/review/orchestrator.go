@@ -10,11 +10,19 @@ import (
 	"github.com/your-org/review-agent/pkg/llm"
 )
 
+// GitHubCommentClient interface for posting comments (to avoid circular imports)
+type GitHubCommentClient interface {
+	CreatePullRequestComment(ctx context.Context, owner, repo string, prNumber int, comment github.CreatePullRequestCommentRequest) (*github.PullRequestComment, error)
+	CreatePullRequestComments(ctx context.Context, owner, repo string, prNumber int, comments []github.CreatePullRequestCommentRequest) (*github.CommentPostingResult, error)
+	GetPullRequestComments(ctx context.Context, owner, repo string, prNumber int) ([]github.PullRequestComment, error)
+}
+
 type DefaultReviewOrchestrator struct {
 	workspaceManager WorkspaceManager
 	diffFetcher      DiffFetcher
 	codeAnalyzer     CodeAnalyzer
 	llmClient        llm.CodeReviewer
+	githubClient     GitHubCommentClient
 }
 
 func NewDefaultReviewOrchestrator(workspaceManager WorkspaceManager, diffFetcher DiffFetcher, codeAnalyzer CodeAnalyzer) *DefaultReviewOrchestrator {
@@ -23,6 +31,7 @@ func NewDefaultReviewOrchestrator(workspaceManager WorkspaceManager, diffFetcher
 		diffFetcher:      diffFetcher,
 		codeAnalyzer:     codeAnalyzer,
 		llmClient:        nil,
+		githubClient:     nil,
 	}
 }
 
@@ -33,6 +42,18 @@ func NewReviewOrchestratorWithLLM(workspaceManager WorkspaceManager, diffFetcher
 		diffFetcher:      diffFetcher,
 		codeAnalyzer:     codeAnalyzer,
 		llmClient:        llmClient,
+		githubClient:     nil,
+	}
+}
+
+// NewReviewOrchestratorWithComments creates orchestrator with LLM and comment posting
+func NewReviewOrchestratorWithComments(workspaceManager WorkspaceManager, diffFetcher DiffFetcher, codeAnalyzer CodeAnalyzer, llmClient llm.CodeReviewer, githubClient GitHubCommentClient) *DefaultReviewOrchestrator {
+	return &DefaultReviewOrchestrator{
+		workspaceManager: workspaceManager,
+		diffFetcher:      diffFetcher,
+		codeAnalyzer:     codeAnalyzer,
+		llmClient:        llmClient,
+		githubClient:     githubClient,
 	}
 }
 
@@ -43,6 +64,7 @@ func NewDefaultReviewOrchestratorLegacy(workspaceManager WorkspaceManager) *Defa
 		diffFetcher:      nil,
 		codeAnalyzer:     nil,
 		llmClient:        nil,
+		githubClient:     nil,
 	}
 }
 
@@ -104,7 +126,16 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) e
 			log.Printf("LLM review completed for PR #%d: %d comments generated", 
 				event.Number, len(reviewResponse.Comments))
 			
-			// TODO: Post generated comments back to GitHub PR
+			// Post generated comments back to GitHub PR
+			if r.githubClient != nil {
+				err := r.postReviewComments(ctx, reviewData, reviewResponse)
+				if err != nil {
+					log.Printf("Warning: Failed to post comments to PR #%d: %v", event.Number, err)
+				}
+			} else {
+				log.Printf("GitHub client not configured, skipping comment posting for PR #%d", event.Number)
+			}
+			
 			r.logReviewResults(reviewResponse)
 		}
 	} else if reviewData != nil {
@@ -199,4 +230,64 @@ func (r *DefaultReviewOrchestrator) logReviewResults(response *llm.ReviewRespons
 			comment.Comment,
 			comment.Severity)
 	}
+}
+
+// postReviewComments posts LLM-generated comments to the GitHub PR
+func (r *DefaultReviewOrchestrator) postReviewComments(ctx context.Context, reviewData *ReviewData, reviewResponse *llm.ReviewResponse) error {
+	if r.githubClient == nil {
+		return fmt.Errorf("GitHub client not configured")
+	}
+
+	// Get the commit SHA from the PR head
+	commitID := reviewData.Event.PullRequest.Head.SHA
+
+	// Convert LLM comments to GitHub format
+	var githubComments []github.CreatePullRequestCommentRequest
+	for _, llmComment := range reviewResponse.Comments {
+		// Convert using the GitHub package conversion function
+		commentInput := github.ReviewCommentInput{
+			Filename:   llmComment.Filename,
+			LineNumber: llmComment.LineNumber,
+			Comment:    llmComment.Comment,
+		}
+		
+		githubComment, shouldPost := github.ConvertReviewCommentToGitHub(commentInput, commitID)
+		if shouldPost {
+			githubComments = append(githubComments, githubComment)
+		} else {
+			log.Printf("Skipping comment for %s (line %d): not suitable for line-specific posting", 
+				llmComment.Filename, llmComment.LineNumber)
+		}
+	}
+
+	if len(githubComments) == 0 {
+		log.Printf("No valid line-specific comments to post for PR #%d", reviewData.Event.Number)
+		return nil
+	}
+
+	// Post comments in batch
+	result, err := r.githubClient.CreatePullRequestComments(
+		ctx,
+		reviewData.Event.Repository.Owner.Login,
+		reviewData.Event.Repository.Name,
+		reviewData.Event.Number,
+		githubComments,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to post comments: %w", err)
+	}
+
+	// Log results
+	log.Printf("Posted %d comments successfully, %d failed for PR #%d", 
+		len(result.SuccessfulComments), 
+		len(result.FailedComments),
+		reviewData.Event.Number)
+
+	// Log any failed comments
+	for _, failed := range result.FailedComments {
+		log.Printf("Failed to post comment for %s:%d - %s", 
+			failed.Request.Path, failed.Request.Line, failed.Error)
+	}
+
+	return nil
 }

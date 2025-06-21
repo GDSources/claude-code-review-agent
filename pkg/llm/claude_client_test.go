@@ -24,7 +24,7 @@ func TestNewClaudeClient(t *testing.T) {
 			name: "valid configuration",
 			config: ClaudeConfig{
 				APIKey:      "test-api-key",
-				Model:       "claude-3-sonnet-20240229",
+				Model:       "claude-sonnet-4-20250514",
 				MaxTokens:   4000,
 				Temperature: 0.1,
 				BaseURL:     "https://api.anthropic.com",
@@ -35,7 +35,7 @@ func TestNewClaudeClient(t *testing.T) {
 		{
 			name: "missing API key",
 			config: ClaudeConfig{
-				Model:       "claude-3-sonnet-20240229",
+				Model:       "claude-sonnet-4-20250514",
 				MaxTokens:   4000,
 				Temperature: 0.1,
 			},
@@ -163,7 +163,7 @@ func TestClaudeClient_ReviewCode(t *testing.T) {
 					Text: "File: test.go\nThis is a test review comment.\n\nSummary:\nThe code looks good overall.",
 				},
 			},
-			Model: "claude-3-sonnet-20240229",
+			Model: "claude-sonnet-4-20250514",
 			Usage: claudeUsage{
 				InputTokens:  100,
 				OutputTokens: 50,
@@ -217,8 +217,8 @@ func TestClaudeClient_ReviewCode(t *testing.T) {
 		t.Fatal("expected response but got nil")
 	}
 
-	if response.ModelUsed != "claude-3-sonnet-20240229" {
-		t.Errorf("expected model 'claude-3-sonnet-20240229', got '%s'", response.ModelUsed)
+	if response.ModelUsed != "claude-sonnet-4-20250514" {
+		t.Errorf("expected model 'claude-sonnet-4-20250514', got '%s'", response.ModelUsed)
 	}
 
 	if response.TokensUsed.InputTokens != 100 {
@@ -359,7 +359,7 @@ func TestClaudeClient_TokenChunking(t *testing.T) {
 					Text: "File: test.go\nChunk review comment.",
 				},
 			},
-			Model: "claude-3-sonnet-20240229",
+			Model: "claude-sonnet-4-20250514",
 			Usage: claudeUsage{
 				InputTokens:  50,
 				OutputTokens: 25,
@@ -483,7 +483,7 @@ func TestGenerateSystemPrompt(t *testing.T) {
 			}
 
 			// Check that base guidelines are included
-			if !strings.Contains(prompt, "Focus on code quality") {
+			if !strings.Contains(prompt, "Focus ONLY on actual problems") {
 				t.Error("expected prompt to contain base guidelines")
 			}
 		})
@@ -575,6 +575,155 @@ Overall the code is well structured but needs some improvements.
 
 	if !strings.Contains(summary, "Overall the code is well structured") {
 		t.Errorf("expected summary to be extracted, got '%s'", summary)
+	}
+}
+
+func TestParseJSONResponse(t *testing.T) {
+	client := &ClaudeClient{}
+
+	tests := []struct {
+		name            string
+		jsonResponse    string
+		expectedComments int
+		expectedSummary string
+		expectError     bool
+	}{
+		{
+			name: "valid JSON response with line numbers",
+			jsonResponse: `{
+				"comments": [
+					{
+						"filename": "main.go",
+						"line_number": 15,
+						"comment": "This function should have error handling",
+						"severity": "major",
+						"type": "issue",
+						"category": "bugs"
+					},
+					{
+						"filename": "utils.go",
+						"line_number": 32,
+						"comment": "Consider using a more descriptive variable name",
+						"severity": "minor",
+						"type": "suggestion",
+						"category": "style"
+					}
+				],
+				"summary": "Overall code quality is good with minor improvements needed"
+			}`,
+			expectedComments: 2,
+			expectedSummary: "Overall code quality is good with minor improvements needed",
+			expectError: false,
+		},
+		{
+			name: "JSON with markdown code blocks",
+			jsonResponse: "```json\n{\n  \"comments\": [\n    {\n      \"filename\": \"test.go\",\n      \"line_number\": 42,\n      \"comment\": \"Test comment\",\n      \"severity\": \"info\",\n      \"type\": \"suggestion\"\n    }\n  ],\n  \"summary\": \"Test summary\"\n}\n```",
+			expectedComments: 1,
+			expectedSummary: "Test summary",
+			expectError: false,
+		},
+		{
+			name: "invalid line numbers filtered out",
+			jsonResponse: `{
+				"comments": [
+					{
+						"filename": "main.go",
+						"line_number": 0,
+						"comment": "This should be filtered out",
+						"severity": "info",
+						"type": "suggestion"
+					},
+					{
+						"filename": "main.go",
+						"line_number": 25,
+						"comment": "This should be included",
+						"severity": "minor",
+						"type": "issue"
+					}
+				],
+				"summary": "Test with invalid line numbers"
+			}`,
+			expectedComments: 1, // Only one valid comment
+			expectedSummary: "Test with invalid line numbers",
+			expectError: false,
+		},
+		{
+			name: "all comments invalid",
+			jsonResponse: `{
+				"comments": [
+					{
+						"filename": "",
+						"line_number": 10,
+						"comment": "Missing filename",
+						"severity": "info",
+						"type": "suggestion"
+					},
+					{
+						"filename": "main.go",
+						"line_number": 0,
+						"comment": "Invalid line number",
+						"severity": "info",
+						"type": "suggestion"
+					}
+				],
+				"summary": "All invalid comments"
+			}`,
+			expectedComments: 0,
+			expectedSummary: "",
+			expectError: true, // Should error when all comments are invalid
+		},
+		{
+			name: "invalid JSON",
+			jsonResponse: `{
+				"comments": [
+					{
+						"filename": "main.go"
+						"line_number": 15,
+					}
+				]
+			}`, // Missing comma - invalid JSON
+			expectedComments: 0,
+			expectedSummary: "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			comments, summary, err := client.parseJSONResponse(tt.jsonResponse)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(comments) != tt.expectedComments {
+				t.Errorf("expected %d comments, got %d", tt.expectedComments, len(comments))
+			}
+
+			if summary != tt.expectedSummary {
+				t.Errorf("expected summary '%s', got '%s'", tt.expectedSummary, summary)
+			}
+
+			// Validate that all returned comments have valid line numbers
+			for i, comment := range comments {
+				if comment.LineNumber <= 0 {
+					t.Errorf("comment %d has invalid line number: %d", i, comment.LineNumber)
+				}
+				if comment.Filename == "" {
+					t.Errorf("comment %d has empty filename", i)
+				}
+				if comment.Comment == "" {
+					t.Errorf("comment %d has empty comment", i)
+				}
+			}
+		})
 	}
 }
 

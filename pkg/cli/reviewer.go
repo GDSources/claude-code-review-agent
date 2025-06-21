@@ -17,6 +17,7 @@ import (
 type ReviewConfig struct {
 	GitHubToken  string
 	ClaudeAPIKey string
+	ClaudeModel  string
 }
 
 type PRReviewer struct {
@@ -45,9 +46,14 @@ func NewPRReviewer(config *ReviewConfig) *PRReviewer {
 	codeAnalyzer := review.NewDefaultAnalyzerAdapter()
 
 	// Create Claude client for LLM reviews
+	model := config.ClaudeModel
+	if model == "" {
+		model = llm.DefaultClaudeModel
+	}
+	
 	claudeConfig := llm.ClaudeConfig{
 		APIKey: config.ClaudeAPIKey,
-		Model:  llm.DefaultClaudeModel,
+		Model:  model,
 		MaxTokens: llm.DefaultClaudeMaxTokens,
 		Temperature: llm.DefaultClaudeTemperature,
 		BaseURL: llm.DefaultClaudeBaseURL,
@@ -61,8 +67,8 @@ func NewPRReviewer(config *ReviewConfig) *PRReviewer {
 		claudeClient = nil
 	}
 
-	// Create review orchestrator with LLM integration
-	orchestrator := review.NewReviewOrchestratorWithLLM(workspaceManager, diffFetcher, codeAnalyzer, claudeClient)
+	// Create review orchestrator with LLM and comment posting integration
+	orchestrator := review.NewReviewOrchestratorWithComments(workspaceManager, diffFetcher, codeAnalyzer, claudeClient, githubClient)
 
 	return &PRReviewer{
 		config:       config,

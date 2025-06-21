@@ -121,9 +121,39 @@ type ClaudeConfig struct {
 
 // Default configurations
 const (
-	DefaultClaudeModel       = "claude-3-sonnet-20240229"
+	DefaultClaudeModel       = "claude-sonnet-4-20250514"
 	DefaultClaudeMaxTokens   = 4000
 	DefaultClaudeTemperature = 0.1
 	DefaultClaudeBaseURL     = "https://api.anthropic.com"
 	DefaultTimeoutSeconds    = 120
 )
+
+// Available Claude models
+const (
+	ClaudeHaiku35        = "claude-3-5-haiku-20241022"     // Fast, cost-effective
+	ClaudeSonnet35       = "claude-3-5-sonnet-20241022"   // Balanced performance
+	ClaudeSonnet35Latest = "claude-3-5-sonnet-20250106"   // Latest Sonnet 3.5
+	ClaudeHaiku37        = "claude-3-7-haiku-20250109"    // Claude 3.7 Haiku - Fast and efficient
+	ClaudeSonnet37       = "claude-3-7-sonnet-20250109"   // Claude 3.7 Sonnet - Enhanced capabilities
+	ClaudeSonnet4        = "claude-sonnet-4-20250514"     // Most capable, highest cost (recommended)
+)
+
+// AvailableClaudeModels returns a list of supported Claude models
+var AvailableClaudeModels = []string{
+	ClaudeHaiku35,
+	ClaudeSonnet35,
+	ClaudeSonnet35Latest,
+	ClaudeHaiku37,
+	ClaudeSonnet37,
+	ClaudeSonnet4,
+}
+
+// ModelDescriptions provides human-readable descriptions for each model
+var ModelDescriptions = map[string]string{
+	ClaudeHaiku35:        "Claude 3.5 Haiku - Fast and cost-effective, good for simple reviews",
+	ClaudeSonnet35:       "Claude 3.5 Sonnet - Balanced performance and cost",
+	ClaudeSonnet35Latest: "Claude 3.5 Sonnet (Latest) - Enhanced capabilities with recent improvements",
+	ClaudeHaiku37:        "Claude 3.7 Haiku - Fast and efficient with improved reasoning",
+	ClaudeSonnet37:       "Claude 3.7 Sonnet - Enhanced capabilities and better performance",
+	ClaudeSonnet4:        "Claude Sonnet 4 - Most capable model, best for complex analysis (recommended)",
+}

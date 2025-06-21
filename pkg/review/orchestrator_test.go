@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"testing"
+
+	"github.com/your-org/review-agent/pkg/analyzer"
+	"github.com/your-org/review-agent/pkg/github"
+	"github.com/your-org/review-agent/pkg/llm"
 )
 
 type mockWorkspaceManager struct {
@@ -188,5 +192,317 @@ func TestDefaultReviewOrchestrator_WorkspaceIntegration(t *testing.T) {
 
 	if !mockWM.cleanupCalled {
 		t.Error("expected cleanup to be called")
+	}
+}
+
+// Additional mock objects for testing
+
+type mockDiffFetcher struct {
+	diffResult *github.DiffResult
+	shouldFail bool
+	error      error
+}
+
+func (m *mockDiffFetcher) GetPullRequestDiffWithFiles(ctx context.Context, owner, repo string, prNumber int) (*github.DiffResult, error) {
+	if m.shouldFail {
+		return nil, m.error
+	}
+	return m.diffResult, nil
+}
+
+type mockCodeAnalyzer struct {
+	parsedDiff     *analyzer.ParsedDiff
+	contextualDiff *analyzer.ContextualDiff
+	shouldFail     bool
+	error          error
+}
+
+func (m *mockCodeAnalyzer) ParseDiff(rawDiff string) (*analyzer.ParsedDiff, error) {
+	if m.shouldFail {
+		return nil, m.error
+	}
+	return m.parsedDiff, nil
+}
+
+func (m *mockCodeAnalyzer) ExtractContext(parsedDiff *analyzer.ParsedDiff, contextLines int) (*analyzer.ContextualDiff, error) {
+	if m.shouldFail {
+		return nil, m.error
+	}
+	return m.contextualDiff, nil
+}
+
+// Mock objects for comment posting tests
+
+type mockGitHubCommentClient struct {
+	createCommentCalls []createCommentCall
+	shouldFailComment  bool
+	commentError       error
+	getCommentsCalls   []getCommentsCall
+	existingComments   []github.PullRequestComment
+}
+
+type createCommentCall struct {
+	owner    string
+	repo     string
+	prNumber int
+	comment  github.CreatePullRequestCommentRequest
+}
+
+type getCommentsCall struct {
+	owner    string
+	repo     string
+	prNumber int
+}
+
+func (m *mockGitHubCommentClient) CreatePullRequestComment(ctx context.Context, owner, repo string, prNumber int, comment github.CreatePullRequestCommentRequest) (*github.PullRequestComment, error) {
+	m.createCommentCalls = append(m.createCommentCalls, createCommentCall{
+		owner:    owner,
+		repo:     repo,
+		prNumber: prNumber,
+		comment:  comment,
+	})
+
+	if m.shouldFailComment {
+		return nil, m.commentError
+	}
+
+	return &github.PullRequestComment{
+		ID:   int64(len(m.createCommentCalls)),
+		Body: comment.Body,
+		Path: comment.Path,
+		Line: comment.Line,
+	}, nil
+}
+
+func (m *mockGitHubCommentClient) CreatePullRequestComments(ctx context.Context, owner, repo string, prNumber int, comments []github.CreatePullRequestCommentRequest) (*github.CommentPostingResult, error) {
+	result := &github.CommentPostingResult{
+		SuccessfulComments: make([]github.PullRequestComment, 0),
+		FailedComments:     make([]github.FailedComment, 0),
+	}
+
+	for _, comment := range comments {
+		prComment, err := m.CreatePullRequestComment(ctx, owner, repo, prNumber, comment)
+		if err != nil {
+			result.FailedComments = append(result.FailedComments, github.FailedComment{
+				Request: comment,
+				Error:   err.Error(),
+			})
+		} else {
+			result.SuccessfulComments = append(result.SuccessfulComments, *prComment)
+		}
+	}
+
+	return result, nil
+}
+
+func (m *mockGitHubCommentClient) GetPullRequestComments(ctx context.Context, owner, repo string, prNumber int) ([]github.PullRequestComment, error) {
+	m.getCommentsCalls = append(m.getCommentsCalls, getCommentsCall{
+		owner:    owner,
+		repo:     repo,
+		prNumber: prNumber,
+	})
+
+	return m.existingComments, nil
+}
+
+type mockLLMClientWithComments struct {
+	reviewResponse *llm.ReviewResponse
+	shouldFail     bool
+	error          error
+}
+
+func (m *mockLLMClientWithComments) ReviewCode(ctx context.Context, request *llm.ReviewRequest) (*llm.ReviewResponse, error) {
+	if m.shouldFail {
+		return nil, m.error
+	}
+	return m.reviewResponse, nil
+}
+
+func (m *mockLLMClientWithComments) ValidateConfiguration() error {
+	return nil
+}
+
+func (m *mockLLMClientWithComments) GetModelInfo() llm.ModelInfo {
+	return llm.ModelInfo{Name: "test-model"}
+}
+
+func TestDefaultReviewOrchestrator_PostComments_Success(t *testing.T) {
+	// Create mock LLM client with review comments
+	mockLLM := &mockLLMClientWithComments{
+		reviewResponse: &llm.ReviewResponse{
+			Comments: []llm.ReviewComment{
+				{
+					Filename:   "main.go",
+					LineNumber: 15,
+					Comment:    "Consider adding error handling",
+					Severity:   llm.SeverityMajor,
+					Type:       llm.CommentTypeIssue,
+				},
+				{
+					Filename:   "utils.go",
+					LineNumber: 25,
+					Comment:    "Good implementation",
+					Severity:   llm.SeverityInfo,
+					Type:       llm.CommentTypePraise,
+				},
+			},
+			Summary:     "Overall good code quality",
+			ModelUsed:   "test-model",
+			TokensUsed:  llm.TokenUsage{TotalTokens: 100},
+			ReviewID:    "test-review-123",
+			GeneratedAt: "2023-01-01T12:00:00Z",
+		},
+	}
+
+	// Create mock GitHub comment client
+	mockGitHub := &mockGitHubCommentClient{}
+
+	// Create mock workspace manager
+	mockWM := &mockWorkspaceManager{}
+
+	// Create mock diff fetcher
+	mockDF := &mockDiffFetcher{
+		diffResult: &github.DiffResult{
+			RawDiff:    "test diff",
+			TotalFiles: 2,
+		},
+	}
+
+	// Create mock code analyzer  
+	mockCA := &mockCodeAnalyzer{
+		parsedDiff: &analyzer.ParsedDiff{
+			TotalFiles: 2,
+		},
+		contextualDiff: &analyzer.ContextualDiff{
+			ParsedDiff: &analyzer.ParsedDiff{TotalFiles: 2},
+		},
+	}
+
+	// Create orchestrator with comment posting enabled
+	orchestrator := &DefaultReviewOrchestrator{
+		workspaceManager: mockWM,
+		diffFetcher:      mockDF,
+		codeAnalyzer:     mockCA,
+		llmClient:        mockLLM,
+		githubClient:     mockGitHub,
+	}
+
+	// Create test event
+	event := createTestPullRequestEvent()
+
+	// Execute the review
+	err := orchestrator.HandlePullRequest(event)
+	if err != nil {
+		t.Fatalf("HandlePullRequest failed: %v", err)
+	}
+
+	// Verify comments were posted
+	if len(mockGitHub.createCommentCalls) != 2 {
+		t.Errorf("expected 2 comment creation calls, got %d", len(mockGitHub.createCommentCalls))
+	}
+
+	// Verify comment content
+	firstCall := mockGitHub.createCommentCalls[0]
+	if firstCall.comment.Body != "Consider adding error handling" {
+		t.Errorf("expected first comment body 'Consider adding error handling', got '%s'", firstCall.comment.Body)
+	}
+	if firstCall.comment.Path != "main.go" {
+		t.Errorf("expected first comment path 'main.go', got '%s'", firstCall.comment.Path)
+	}
+	if firstCall.comment.Line != 15 {
+		t.Errorf("expected first comment line 15, got %d", firstCall.comment.Line)
+	}
+}
+
+func TestDefaultReviewOrchestrator_PostComments_Failure(t *testing.T) {
+	// Create mock LLM client with review comments
+	mockLLM := &mockLLMClientWithComments{
+		reviewResponse: &llm.ReviewResponse{
+			Comments: []llm.ReviewComment{
+				{
+					Filename:   "main.go",
+					LineNumber: 15,
+					Comment:    "Test comment",
+					Severity:   llm.SeverityMajor,
+					Type:       llm.CommentTypeIssue,
+				},
+			},
+			Summary: "Test summary",
+		},
+	}
+
+	// Create mock GitHub comment client that fails
+	mockGitHub := &mockGitHubCommentClient{
+		shouldFailComment: true,
+		commentError:      fmt.Errorf("GitHub API error"),
+	}
+
+	// Create other mocks
+	mockWM := &mockWorkspaceManager{}
+	mockDF := &mockDiffFetcher{
+		diffResult: &github.DiffResult{RawDiff: "test diff", TotalFiles: 1},
+	}
+	mockCA := &mockCodeAnalyzer{
+		contextualDiff: &analyzer.ContextualDiff{
+			ParsedDiff: &analyzer.ParsedDiff{TotalFiles: 1},
+		},
+	}
+
+	// Create orchestrator
+	orchestrator := &DefaultReviewOrchestrator{
+		workspaceManager: mockWM,
+		diffFetcher:      mockDF,
+		codeAnalyzer:     mockCA,
+		llmClient:        mockLLM,
+		githubClient:     mockGitHub,
+	}
+
+	// Execute the review
+	err := orchestrator.HandlePullRequest(createTestPullRequestEvent())
+
+	// Should not fail even if comment posting fails
+	if err != nil {
+		t.Errorf("HandlePullRequest should not fail when comment posting fails, got: %v", err)
+	}
+
+	// Verify comment posting was attempted
+	if len(mockGitHub.createCommentCalls) != 1 {
+		t.Errorf("expected 1 comment creation attempt, got %d", len(mockGitHub.createCommentCalls))
+	}
+}
+
+func TestDefaultReviewOrchestrator_WithoutGitHubClient(t *testing.T) {
+	// Test that orchestrator works without GitHub client (no comment posting)
+	mockLLM := &mockLLMClientWithComments{
+		reviewResponse: &llm.ReviewResponse{
+			Comments: []llm.ReviewComment{
+				{Filename: "test.go", LineNumber: 1, Comment: "Test"},
+			},
+		},
+	}
+
+	mockWM := &mockWorkspaceManager{}
+	mockDF := &mockDiffFetcher{
+		diffResult: &github.DiffResult{RawDiff: "test", TotalFiles: 1},
+	}
+	mockCA := &mockCodeAnalyzer{
+		contextualDiff: &analyzer.ContextualDiff{
+			ParsedDiff: &analyzer.ParsedDiff{TotalFiles: 1},
+		},
+	}
+
+	// Create orchestrator without GitHub client
+	orchestrator := &DefaultReviewOrchestrator{
+		workspaceManager: mockWM,
+		diffFetcher:      mockDF,
+		codeAnalyzer:     mockCA,
+		llmClient:        mockLLM,
+		githubClient:     nil, // No GitHub client
+	}
+
+	// Should succeed without trying to post comments
+	err := orchestrator.HandlePullRequest(createTestPullRequestEvent())
+	if err != nil {
+		t.Errorf("HandlePullRequest should succeed without GitHub client, got: %v", err)
 	}
 }

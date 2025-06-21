@@ -61,6 +61,23 @@ type claudeErrorResponse struct {
 	Error claudeError `json:"error"`
 }
 
+// claudeReviewResponse represents the expected JSON response format from Claude
+type claudeReviewResponse struct {
+	Comments []claudeReviewComment `json:"comments"`
+	Summary  string                `json:"summary"`
+}
+
+// claudeReviewComment represents a single review comment in Claude's JSON response
+type claudeReviewComment struct {
+	Filename   string `json:"filename"`
+	LineNumber int    `json:"line_number"`
+	Comment    string `json:"comment"`
+	Severity   string `json:"severity"`
+	Type       string `json:"type"`
+	Category   string `json:"category,omitempty"`
+	Suggestion string `json:"suggestion,omitempty"`
+}
+
 // NewClaudeClient creates a new Claude client with the given configuration
 func NewClaudeClient(config ClaudeConfig) (*ClaudeClient, error) {
 	// Set defaults first
@@ -314,7 +331,7 @@ func (c *ClaudeClient) shouldRetry(err error) bool {
 		strings.Contains(errStr, "connection")
 }
 
-// parseClaudeResponse extracts review comments from Claude's response
+// parseClaudeResponse extracts review comments from Claude's JSON response
 func (c *ClaudeClient) parseClaudeResponse(resp *claudeResponse) ([]ReviewComment, string, error) {
 	if len(resp.Content) == 0 {
 		return nil, "", fmt.Errorf("empty response content")
@@ -332,10 +349,120 @@ func (c *ClaudeClient) parseClaudeResponse(resp *claudeResponse) ([]ReviewCommen
 		return nil, "", fmt.Errorf("no text content in response")
 	}
 
-	// Parse the response text to extract structured review comments
-	comments, summary := c.parseReviewText(responseText)
+	// Try to parse as JSON first
+	comments, summary, err := c.parseJSONResponse(responseText)
+	if err != nil {
+		// Fallback to text parsing for backward compatibility
+		comments, summary := c.parseReviewText(responseText)
+		return comments, summary, nil
+	}
 
 	return comments, summary, nil
+}
+
+// parseJSONResponse parses Claude's JSON response into structured review comments
+func (c *ClaudeClient) parseJSONResponse(responseText string) ([]ReviewComment, string, error) {
+	// Clean up the response text - sometimes Claude wraps JSON in markdown code blocks
+	cleanedText := strings.TrimSpace(responseText)
+
+	// Remove markdown code blocks if present
+	if strings.HasPrefix(cleanedText, "```json") {
+		cleanedText = strings.TrimPrefix(cleanedText, "```json")
+		cleanedText = strings.TrimSuffix(cleanedText, "```")
+		cleanedText = strings.TrimSpace(cleanedText)
+	} else if strings.HasPrefix(cleanedText, "```") {
+		cleanedText = strings.TrimPrefix(cleanedText, "```")
+		cleanedText = strings.TrimSuffix(cleanedText, "```")
+		cleanedText = strings.TrimSpace(cleanedText)
+	}
+
+	// Parse the JSON response
+	var claudeResp claudeReviewResponse
+	if err := json.Unmarshal([]byte(cleanedText), &claudeResp); err != nil {
+		return nil, "", fmt.Errorf("failed to parse JSON response: %w", err)
+	}
+
+	// Convert Claude's response to our internal format
+	var comments []ReviewComment
+	var skippedCount int
+
+	for _, claudeComment := range claudeResp.Comments {
+		// Validate required fields
+		if claudeComment.Filename == "" {
+			skippedCount++
+			continue
+		}
+
+		if claudeComment.Comment == "" {
+			skippedCount++
+			continue
+		}
+
+		// Validate line number - this is critical!
+		if claudeComment.LineNumber <= 0 {
+			skippedCount++
+			continue
+		}
+
+		// Map severity with validation
+		severity := c.mapSeverity(claudeComment.Severity)
+
+		// Map comment type with validation
+		commentType := c.mapCommentType(claudeComment.Type)
+
+		comment := ReviewComment{
+			Filename:   claudeComment.Filename,
+			LineNumber: claudeComment.LineNumber,
+			Comment:    claudeComment.Comment,
+			Severity:   severity,
+			Type:       commentType,
+			Category:   claudeComment.Category,
+			Suggestion: claudeComment.Suggestion,
+		}
+
+		comments = append(comments, comment)
+	}
+
+	// If we skipped comments, this indicates potential issues with LLM following instructions
+	if skippedCount > 0 && len(comments) == 0 {
+		return nil, "", fmt.Errorf("all %d comments were invalid (missing filename, comment, or valid line number)", skippedCount)
+	}
+
+	return comments, claudeResp.Summary, nil
+}
+
+// mapSeverity maps Claude's severity strings to our Severity enum
+func (c *ClaudeClient) mapSeverity(severity string) Severity {
+	switch strings.ToLower(severity) {
+	case "info", "informational":
+		return SeverityInfo
+	case "minor", "low":
+		return SeverityMinor
+	case "major", "high":
+		return SeverityMajor
+	case "critical", "blocker":
+		return SeverityCritical
+	default:
+		return SeverityMinor // Default fallback
+	}
+}
+
+// mapCommentType maps Claude's type strings to our CommentType enum
+func (c *ClaudeClient) mapCommentType(commentType string) CommentType {
+	switch strings.ToLower(commentType) {
+	case "suggestion", "improvement":
+		return CommentTypeSuggestion
+	case "issue", "problem", "bug":
+		return CommentTypeIssue
+	case "praise", "positive":
+		return CommentTypePraise
+	case "question", "clarification":
+		return CommentTypeQuestion
+	case "nitpick", "style", "minor":
+		return CommentTypeNitpick
+	default:
+		return CommentTypeSuggestion // Default fallback
+	}
 }
 
 // parseReviewText parses the Claude response text into structured review comments
@@ -444,7 +571,23 @@ func validateClaudeConfig(config ClaudeConfig) error {
 	if config.Temperature < 0 || config.Temperature > 2 {
 		return fmt.Errorf("temperature must be between 0 and 2")
 	}
+	
+	// Validate model is supported
+	if !isValidClaudeModel(config.Model) {
+		return fmt.Errorf("unsupported model '%s'. Available models: %v", config.Model, AvailableClaudeModels)
+	}
+	
 	return nil
+}
+
+// isValidClaudeModel checks if the provided model is in the list of supported models
+func isValidClaudeModel(model string) bool {
+	for _, validModel := range AvailableClaudeModels {
+		if model == validModel {
+			return true
+		}
+	}
+	return false
 }
 
 // chunkRequestIfNeeded splits large requests into smaller chunks if needed
@@ -500,23 +643,89 @@ func (c *ClaudeClient) generateSystemPrompt(reviewType ReviewType) string {
 	basePrompt := `You are an expert code reviewer assistant. Your task is to review code changes in a pull request and provide helpful, constructive feedback.
 
 Guidelines:
-- Focus on code quality, security, performance, and maintainability
-- Provide specific, actionable feedback
+- Focus ONLY on actual problems that could cause bugs, security issues, or performance problems
+- Provide specific, actionable feedback with clear impact explanation
 - Be constructive and helpful in your tone
-- Point out issues
-- Do not point out good practices
-- When suggesting changes, explain the reasoning
-- Use clear, professional language
-- Format your response with clear sections for different files
+- Only comment on code that has demonstrable issues or risks
+- When suggesting changes, explain the specific negative consequence if not fixed
 
-Response Format:
-For each file with issues or suggestions, use this format:
+CRITICAL DO NOT RULES:
+- DO NOT suggest adding comments, documentation, or docstrings unless missing docs cause actual confusion about complex logic
+- DO NOT explain what code does - only comment on actual problems
+- DO NOT suggest general improvements without demonstrable negative impact
+- DO NOT comment on variable naming unless it causes genuine confusion or bugs
+- DO NOT comment on formatting/style unless it significantly affects readability or could cause errors
+- DO NOT suggest "best practices" without explaining the specific risk of current approach
+- DO NOT create comments for preference or opinion - only for concrete issues
 
-File: [filename]
-[Your detailed review comments for this file]
+QUALITY THRESHOLD:
+Every comment must meet this test: "If this issue is not addressed, what specific problem could occur?"
+If you cannot identify a concrete negative consequence, do not comment.
 
-Summary:
-[Overall summary of the code changes and key recommendations]
+CRITICAL: You MUST respond with valid JSON in the following format:
+
+{
+  "comments": [
+    {
+      "filename": "path/to/file.ext",
+      "line_number": 42,
+      "comment": "Detailed explanation of the issue or suggestion",
+      "severity": "minor|major|critical",
+      "type": "issue|suggestion|nitpick",
+      "category": "security|performance|style|bugs|maintainability",
+      "suggestion": "Optional: specific code suggestion to fix the issue"
+    }
+  ],
+  "summary": "Overall summary of the code changes and key recommendations"
+}
+
+Line Number Instructions:
+- Extract line numbers from diff hunks like "@@ -10,5 +15,7 @@" (this means new file starts at line 15)
+- For additions (+ lines), use the NEW file line number (right side of diff)
+- For modifications, use the line number where the NEW code appears
+- For deletions, use the line number of the surrounding context
+- Count line numbers incrementally from the hunk start position
+- NEVER use line_number: 0 - always provide a specific line number > 0
+- If you cannot determine a specific line, use the closest reasonable line number
+
+Example diff analysis:
+` + "`" + `diff
+@@ -8,4 +8,6 @@ function example() {
+   const a = 1;        // line 9 (context)
+-  const b = 2;        // line 10 (old, being removed)  
++  const b = 3;        // line 10 (new replacement)
++  const c = 4;        // line 11 (new addition)
+   return a + b;       // line 12 (context)
+` + "`" + `
+
+For the change "const b = 3", use line_number: 10
+For the addition "const c = 4", use line_number: 11
+
+Field Specifications:
+- filename: Exact file path as shown in the diff
+- line_number: Integer > 0, never use 0
+- comment: Clear, specific feedback explaining the problem and its impact (50-200 characters recommended)
+- severity: Use strictly: "minor" (could cause minor bugs/issues), "major" (likely to cause significant problems), "critical" (will definitely cause failures/security issues)
+- type: "issue" (concrete problem that needs fixing), "suggestion" (improvement with clear benefit), avoid "nitpick" unless truly critical
+- category: General category of the feedback
+- suggestion: Optional specific code to fix the issue
+
+IMPACT REQUIREMENT:
+Every comment must explain WHY it matters. Use this format:
+"[Problem description] - this could cause [specific negative consequence]"
+
+Examples of HIGH-QUALITY comments:
+ "Missing null check before dereferencing user.email - this will cause NullPointerException when user is not authenticated"
+ "Race condition: shared counter accessed without synchronization - this could cause data corruption in concurrent requests"
+ "SQL injection vulnerability: user input concatenated directly into query - this allows attackers to execute arbitrary SQL"
+ "Memory leak: file handle not closed in error path - this will exhaust file descriptors under high load"
+
+Examples of LOW-QUALITY comments to AVOID:
+ "Consider adding documentation to explain this function"
+ "This variable name could be more descriptive"
+ "You might want to use a constant here"
+ "This function is doing a lot of things"
+ "Consider extracting this into a separate method"
 `
 
 	switch reviewType {
@@ -524,67 +733,87 @@ Summary:
 		return basePrompt + `
 
 Special Focus: SECURITY REVIEW
-- Look for potential security vulnerabilities (SQL injection, XSS, authentication bypass, etc.)
-- Check for proper input validation and sanitization
-- Verify secure handling of sensitive data
-- Review authentication and authorization logic
-- Check for hardcoded secrets or credentials
-- Assess cryptographic implementations`
+ONLY comment on actual security vulnerabilities that could be exploited:
+- SQL injection, XSS, CSRF vulnerabilities (not general input validation suggestions)
+- Authentication bypass or authorization flaws (not "add authentication" suggestions)
+- Hardcoded secrets, passwords, or API keys in code
+- Insecure cryptographic implementations (weak algorithms, poor key management)
+- Data exposure through logging, error messages, or unprotected endpoints
+- Path traversal, command injection, or code injection vulnerabilities
+
+Focus on exploitable vulnerabilities, not security "best practices" without clear attack vectors.
+Remember: Return JSON format with specific line numbers for each concrete security vulnerability found.`
 
 	case ReviewTypePerformance:
 		return basePrompt + `
 
 Special Focus: PERFORMANCE REVIEW
-- Identify potential performance bottlenecks
-- Look for inefficient algorithms or data structures
-- Check for unnecessary database queries or API calls
-- Review memory usage and potential leaks
-- Assess concurrent programming patterns
-- Identify optimization opportunities`
+ONLY comment on actual performance problems that will impact users:
+- O(n²) or worse algorithms where O(n log n) alternatives exist
+- Memory leaks (resources not freed, growing caches, event listeners not removed)
+- Unnecessary database queries in loops (N+1 problems)
+- Blocking operations on main threads
+- Resource contention or deadlock potential in concurrent code
+- Excessive object allocation in hot paths
+
+Focus on measurable performance degradation, not theoretical optimizations.
+Remember: Return JSON format with specific line numbers for each concrete performance issue found.`
 
 	case ReviewTypeStyle:
 		return basePrompt + `
 
 Special Focus: CODE STYLE AND STANDARDS
-- Check adherence to coding standards and conventions
-- Review code formatting and consistency
-- Assess naming conventions for variables, functions, and classes
-- Check code organization and structure
-- Review documentation and comments
-- Verify proper error handling patterns`
+ONLY comment on style issues that could cause bugs or significant confusion:
+- Inconsistent error handling patterns that could hide failures
+- Confusing variable names that make bugs likely (single letters in complex logic, misleading names)
+- Missing error handling that could cause silent failures
+- Code organization that violates team standards and causes maintainability issues
+
+Avoid commenting on minor formatting, preference-based naming, or cosmetic issues.
+Remember: Return JSON format with specific line numbers for each style issue that impacts correctness.`
 
 	case ReviewTypeBugs:
 		return basePrompt + `
 
 Special Focus: BUG DETECTION
-- Look for potential bugs and logic errors
-- Check for edge cases and error conditions
-- Review null pointer and boundary condition handling
-- Assess error handling and recovery
-- Look for race conditions in concurrent code
-- Check for proper resource cleanup`
+ONLY comment on actual bugs and logic errors that will cause runtime failures:
+- Null pointer dereferences, array bounds violations, type errors
+- Logic errors in conditionals or loops that produce wrong results
+- Unhandled edge cases that will cause crashes or incorrect behavior
+- Race conditions, deadlocks, or thread safety violations
+- Resource leaks (memory, file handles, database connections not closed)
+- Exception handling gaps that could cause silent failures
+
+Focus on code that will definitely malfunction, not code that "might" have issues.
+Remember: Return JSON format with specific line numbers for each concrete bug found.`
 
 	case ReviewTypeTests:
 		return basePrompt + `
 
 Special Focus: TEST QUALITY
-- Review test coverage and completeness
-- Check test case quality and edge case coverage
-- Assess test maintainability and clarity
-- Review mock usage and test isolation
-- Check for proper assertions and test data
-- Evaluate integration and unit test balance`
+ONLY comment on test issues that could hide bugs or cause flaky tests:
+- Missing assertions that could let bugs pass silently
+- Tests that don't actually test the claimed functionality
+- Flaky tests with race conditions or environment dependencies
+- Tests that modify global state and affect other tests
+- Missing negative test cases for error conditions that could hide real bugs
+
+Avoid comments about test organization, naming conventions, or minor improvements.
+Remember: Return JSON format with specific line numbers for each test reliability issue found.`
 
 	default: // ReviewTypeGeneral
 		return basePrompt + `
 
 Focus: GENERAL CODE REVIEW
-- Overall code quality and maintainability
-- Logic correctness and clarity
-- Proper error handling
-- Code organization and structure
-- Performance considerations
-- Security best practices`
+ONLY comment on issues that could cause runtime problems or significant maintainability issues:
+- Logic errors that produce incorrect results
+- Missing error handling that could cause crashes
+- Obvious security vulnerabilities (SQL injection, XSS, etc.)
+- Performance issues that will impact users (inefficient algorithms, memory leaks)
+- Resource management problems (connections not closed, memory not freed)
+
+Prioritize bugs and security issues over style preferences or minor improvements.
+Remember: Return JSON format with specific line numbers for each concrete issue found.`
 	}
 }
 
@@ -629,7 +858,9 @@ func (c *ClaudeClient) generateUserPrompt(request *ReviewRequest) string {
 		prompt.WriteString("\n```\n\n")
 	}
 
-	prompt.WriteString("Please provide your review focusing on the requested review type and following the guidelines above.")
+	prompt.WriteString("Please provide your review in the JSON format specified above. ")
+	prompt.WriteString("Focus on the requested review type and include specific line numbers for each comment. ")
+	prompt.WriteString("Remember: NEVER use line_number: 0, always provide specific line numbers > 0 based on the diff hunk positions.")
 
 	return prompt.String()
 }
@@ -712,8 +943,10 @@ func (c *ClaudeClient) generateUserPromptForFiles(request *ReviewRequest, files 
 		prompt.WriteString("---\n\n")
 	}
 
-	prompt.WriteString("Please provide your review focusing on the requested review type and following the guidelines above. ")
-	prompt.WriteString("For each file, identify specific issues, suggestions, or positive aspects of the code changes.")
+	prompt.WriteString("Please provide your review in the JSON format specified above. ")
+	prompt.WriteString("Focus on the requested review type and include specific line numbers for each comment. ")
+	prompt.WriteString("For each file, identify specific issues and suggestions with exact line numbers from the diff hunks. ")
+	prompt.WriteString("Remember: NEVER use line_number: 0, always provide specific line numbers > 0 based on the diff hunk positions.")
 
 	return prompt.String()
 }

@@ -21,12 +21,14 @@ const (
 type Config struct {
 	GitHubToken   string
 	ClaudeAPIKey  string
+	ClaudeModel   string
 	WebhookSecret string
 }
 
 type ServerConfig struct {
 	GitHubToken   string
 	ClaudeAPIKey  string
+	ClaudeModel   string
 	WebhookSecret string
 	Port          int
 }
@@ -83,6 +85,7 @@ func runReview(args []string) {
 
 	fs.StringVar(&config.GitHubToken, "github-token", "", "GitHub API token")
 	fs.StringVar(&config.ClaudeAPIKey, "claude-key", "", "Claude API key")
+	fs.StringVar(&config.ClaudeModel, "claude-model", "", "Claude model to use")
 	fs.StringVar(&owner, "owner", "", "Repository owner/organization")
 	fs.StringVar(&repo, "repo", "", "Repository name")
 	fs.IntVar(&prNumber, "pr", 0, "Pull request number")
@@ -96,9 +99,18 @@ Usage:
 Flags:
   --github-token    GitHub API token (or set GITHUB_TOKEN env var)
   --claude-key      Claude API key (or set CLAUDE_API_KEY env var)
+  --claude-model    Claude model to use (or set CLAUDE_MODEL env var, default: claude-sonnet-4-20250514)
   --owner           Repository owner/organization (required)
   --repo            Repository name (required)
   --pr              Pull request number (required)
+
+Available Claude Models:
+  claude-3-5-haiku-20241022     Fast and cost-effective, good for simple reviews
+  claude-3-5-sonnet-20241022    Balanced performance and cost
+  claude-3-5-sonnet-20250106    Enhanced capabilities with recent improvements
+  claude-3-7-haiku-20250109     Fast and efficient with improved reasoning
+  claude-3-7-sonnet-20250109    Enhanced capabilities and better performance
+  claude-sonnet-4-20250514      Most capable model, best for complex analysis (recommended)
 
 Configuration:
   The tool loads configuration in this order (highest precedence first):
@@ -205,6 +217,9 @@ func loadEnvConfig(config *Config) error {
 	if config.ClaudeAPIKey == "" {
 		config.ClaudeAPIKey = os.Getenv("CLAUDE_API_KEY")
 	}
+	if config.ClaudeModel == "" {
+		config.ClaudeModel = os.Getenv("CLAUDE_MODEL")
+	}
 	if config.WebhookSecret == "" {
 		config.WebhookSecret = os.Getenv("WEBHOOK_SECRET")
 	}
@@ -238,6 +253,7 @@ func executeReview(config *Config, owner, repo string, prNumber int) error {
 	reviewConfig := &cli.ReviewConfig{
 		GitHubToken:  config.GitHubToken,
 		ClaudeAPIKey: config.ClaudeAPIKey,
+		ClaudeModel:  config.ClaudeModel,
 	}
 
 	reviewer := cli.NewPRReviewer(reviewConfig)
@@ -259,6 +275,7 @@ func runServer(args []string) {
 
 	fs.StringVar(&serverConfig.GitHubToken, "github-token", "", "GitHub API token")
 	fs.StringVar(&serverConfig.ClaudeAPIKey, "claude-key", "", "Claude API key")
+	fs.StringVar(&serverConfig.ClaudeModel, "claude-model", "", "Claude model to use")
 	fs.StringVar(&serverConfig.WebhookSecret, "webhook-secret", "", "GitHub webhook secret")
 	fs.IntVar(&serverConfig.Port, "port", 8080, "Server port")
 
@@ -271,8 +288,17 @@ Usage:
 Flags:
   --github-token     GitHub API token (or set GITHUB_TOKEN env var)
   --claude-key       Claude API key (or set CLAUDE_API_KEY env var)
+  --claude-model     Claude model to use (or set CLAUDE_MODEL env var, default: claude-sonnet-4-20250514)
   --webhook-secret   GitHub webhook secret (or set WEBHOOK_SECRET env var)
   --port             Server port (default: 8080)
+
+Available Claude Models:
+  claude-3-5-haiku-20241022     Fast and cost-effective, good for simple reviews
+  claude-3-5-sonnet-20241022    Balanced performance and cost
+  claude-3-5-sonnet-20250106    Enhanced capabilities with recent improvements
+  claude-3-7-haiku-20250109     Fast and efficient with improved reasoning
+  claude-3-7-sonnet-20250109    Enhanced capabilities and better performance
+  claude-sonnet-4-20250514      Most capable model, best for complex analysis (recommended)
 
 Configuration:
   The server loads configuration in this order (highest precedence first):
@@ -328,6 +354,9 @@ func loadServerConfig(config *ServerConfig) error {
 	if config.ClaudeAPIKey == "" {
 		config.ClaudeAPIKey = os.Getenv("CLAUDE_API_KEY")
 	}
+	if config.ClaudeModel == "" {
+		config.ClaudeModel = os.Getenv("CLAUDE_MODEL")
+	}
 	if config.WebhookSecret == "" {
 		config.WebhookSecret = os.Getenv("WEBHOOK_SECRET")
 	}
@@ -382,9 +411,14 @@ func startWebhookServer(config *ServerConfig) error {
 	// Create Claude client for LLM reviews
 	var claudeClient llm.CodeReviewer
 	if config.ClaudeAPIKey != "" {
+		model := config.ClaudeModel
+		if model == "" {
+			model = llm.DefaultClaudeModel
+		}
+		
 		claudeConfig := llm.ClaudeConfig{
 			APIKey:      config.ClaudeAPIKey,
-			Model:       llm.DefaultClaudeModel,
+			Model:       model,
 			MaxTokens:   llm.DefaultClaudeMaxTokens,
 			Temperature: llm.DefaultClaudeTemperature,
 			BaseURL:     llm.DefaultClaudeBaseURL,
@@ -401,8 +435,8 @@ func startWebhookServer(config *ServerConfig) error {
 		fmt.Printf("Warning: CLAUDE_API_KEY not provided, LLM reviews will be skipped\n")
 	}
 
-	// Create review orchestrator with LLM integration
-	orchestrator := review.NewReviewOrchestratorWithLLM(workspaceManager, diffFetcher, codeAnalyzer, claudeClient)
+	// Create review orchestrator with LLM and comment posting integration
+	orchestrator := review.NewReviewOrchestratorWithComments(workspaceManager, diffFetcher, codeAnalyzer, claudeClient, githubClient)
 
 	// Create event processor
 	eventProcessor := webhook.NewGitHubEventProcessor(orchestrator)
