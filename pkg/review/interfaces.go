@@ -3,6 +3,8 @@ package review
 import (
 	"context"
 
+	"github.com/your-org/review-agent/pkg/analyzer"
+	"github.com/your-org/review-agent/pkg/github"
 	"github.com/your-org/review-agent/pkg/webhook"
 )
 
@@ -36,4 +38,23 @@ type Workspace struct {
 type WorkspaceManager interface {
 	CreateWorkspace(ctx context.Context, event *PullRequestEvent) (*Workspace, error)
 	CleanupWorkspace(workspace *Workspace) error
+}
+
+// DiffFetcher fetches PR diffs from GitHub API
+type DiffFetcher interface {
+	GetPullRequestDiffWithFiles(ctx context.Context, owner, repo string, prNumber int) (*github.DiffResult, error)
+}
+
+// CodeAnalyzer processes diffs and extracts structured information for LLM analysis
+type CodeAnalyzer interface {
+	ParseDiff(rawDiff string) (*analyzer.ParsedDiff, error)
+	ExtractContext(parsedDiff *analyzer.ParsedDiff, contextLines int) (*analyzer.ContextualDiff, error)
+}
+
+// ReviewData contains all information needed for LLM analysis
+type ReviewData struct {
+	Event          *PullRequestEvent      `json:"event"`
+	Workspace      *Workspace             `json:"workspace"`
+	DiffResult     *github.DiffResult     `json:"diff_result"`
+	ContextualDiff *analyzer.ContextualDiff `json:"contextual_diff"`
 }

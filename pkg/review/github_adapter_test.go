@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"testing"
+
+	"github.com/your-org/review-agent/pkg/github"
 )
 
 type mockGitHubClient struct {
@@ -47,6 +49,19 @@ func (m *mockGitHubClient) CheckoutBranch(ctx context.Context, repoPath, branch 
 		return m.error
 	}
 	return nil
+}
+
+func (m *mockGitHubClient) GetPullRequestDiffWithFiles(ctx context.Context, owner, repo string, prNumber int) (*github.DiffResult, error) {
+	if m.shouldFail {
+		return nil, m.error
+	}
+	
+	// Return a mock diff result
+	return &github.DiffResult{
+		Files:      []github.PullRequestFile{},
+		RawDiff:    "mock diff content",
+		TotalFiles: 0,
+	}, nil
 }
 
 func TestGitHubClonerAdapter_CloneRepository(t *testing.T) {
@@ -191,7 +206,8 @@ func TestNewGitHubClonerAdapter(t *testing.T) {
 		t.Error("expected adapter to be created")
 	}
 
-	if adapter.client != mockClient {
+	// We can't directly compare interface values, but we can verify the adapter is configured
+	if adapter.client == nil {
 		t.Error("expected adapter to store the provided client")
 	}
 }

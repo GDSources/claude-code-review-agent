@@ -114,7 +114,7 @@ func TestDefaultReviewOrchestrator_HandlePullRequest(t *testing.T) {
 				cleanupError:      tt.workspaceCleanupErr,
 			}
 
-			orchestrator := NewDefaultReviewOrchestrator(mockWM)
+			orchestrator := NewDefaultReviewOrchestratorLegacy(mockWM)
 			event := createTestPullRequestEvent()
 
 			err := orchestrator.HandlePullRequest(event)
@@ -163,7 +163,7 @@ func min(a, b int) int {
 
 func TestDefaultReviewOrchestrator_WorkspaceIntegration(t *testing.T) {
 	mockWM := &mockWorkspaceManager{}
-	orchestrator := NewDefaultReviewOrchestrator(mockWM)
+	orchestrator := NewDefaultReviewOrchestratorLegacy(mockWM)
 	event := createTestPullRequestEvent()
 
 	err := orchestrator.HandlePullRequest(event)

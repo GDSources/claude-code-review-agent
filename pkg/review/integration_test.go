@@ -78,7 +78,7 @@ func TestReviewOrchestrator_Integration(t *testing.T) {
 			workspaceManager := NewDefaultWorkspaceManager(mockCloner, fsManager)
 
 			// Create orchestrator
-			orchestrator := NewDefaultReviewOrchestrator(workspaceManager)
+			orchestrator := NewDefaultReviewOrchestratorLegacy(workspaceManager)
 
 			// Create test event
 			event := createTestEvent()
@@ -220,7 +220,7 @@ func TestReviewOrchestrator_ErrorHandling(t *testing.T) {
 		}
 		fsManager := NewDefaultFileSystemManager()
 		workspaceManager := NewDefaultWorkspaceManager(mockCloner, fsManager)
-		orchestrator := NewDefaultReviewOrchestrator(workspaceManager)
+		orchestrator := NewDefaultReviewOrchestratorLegacy(workspaceManager)
 
 		event := createTestEvent()
 		err := orchestrator.HandlePullRequest(event)

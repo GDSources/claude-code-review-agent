@@ -4,15 +4,31 @@ import (
 	"context"
 	"fmt"
 	"log"
+
+	"github.com/your-org/review-agent/pkg/analyzer"
+	"github.com/your-org/review-agent/pkg/github"
 )
 
 type DefaultReviewOrchestrator struct {
 	workspaceManager WorkspaceManager
+	diffFetcher      DiffFetcher
+	codeAnalyzer     CodeAnalyzer
 }
 
-func NewDefaultReviewOrchestrator(workspaceManager WorkspaceManager) *DefaultReviewOrchestrator {
+func NewDefaultReviewOrchestrator(workspaceManager WorkspaceManager, diffFetcher DiffFetcher, codeAnalyzer CodeAnalyzer) *DefaultReviewOrchestrator {
 	return &DefaultReviewOrchestrator{
 		workspaceManager: workspaceManager,
+		diffFetcher:      diffFetcher,
+		codeAnalyzer:     codeAnalyzer,
+	}
+}
+
+// NewDefaultReviewOrchestratorLegacy creates orchestrator without diff analysis (for backward compatibility)
+func NewDefaultReviewOrchestratorLegacy(workspaceManager WorkspaceManager) *DefaultReviewOrchestrator {
+	return &DefaultReviewOrchestrator{
+		workspaceManager: workspaceManager,
+		diffFetcher:      nil,
+		codeAnalyzer:     nil,
 	}
 }
 
@@ -35,8 +51,74 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) e
 	log.Printf("Successfully cloned repository %s to %s", event.Repository.FullName, workspace.Path)
 	log.Printf("Checked out branch %s for PR #%d", event.PullRequest.Head.Ref, event.Number)
 
-	// TODO: Add code analysis, LLM review, and comment posting here
-	log.Printf("Review completed for PR #%d", event.Number)
+	// Fetch and analyze PR diff if analyzers are available
+	var reviewData *ReviewData
+	if r.diffFetcher != nil && r.codeAnalyzer != nil {
+		diffResult, err := r.fetchPRDiff(ctx, event)
+		if err != nil {
+			log.Printf("Warning: failed to fetch PR diff: %v", err)
+		} else {
+			log.Printf("Fetched diff for PR #%d: %d files changed", event.Number, diffResult.TotalFiles)
+			
+			contextualDiff, err := r.analyzeDiff(diffResult)
+			if err != nil {
+				log.Printf("Warning: failed to analyze diff: %v", err)
+			} else {
+				log.Printf("Analyzed diff for PR #%d: %d added, %d removed lines", 
+					event.Number, contextualDiff.TotalAdded, contextualDiff.TotalRemoved)
+				
+				reviewData = &ReviewData{
+					Event:          event,
+					Workspace:      workspace,
+					DiffResult:     diffResult,
+					ContextualDiff: contextualDiff,
+				}
+			}
+		}
+	} else {
+		log.Printf("Diff analysis skipped (analyzers not configured)")
+	}
 
+	// TODO: Send reviewData to LLM for analysis and generate comments
+	// TODO: Post generated comments back to GitHub PR
+	
+	if reviewData != nil {
+		log.Printf("Review data prepared for PR #%d (ready for LLM analysis)", event.Number)
+	}
+	
+	log.Printf("Review completed for PR #%d", event.Number)
 	return nil
+}
+
+// fetchPRDiff fetches the diff for a pull request
+func (r *DefaultReviewOrchestrator) fetchPRDiff(ctx context.Context, event *PullRequestEvent) (*github.DiffResult, error) {
+	if r.diffFetcher == nil {
+		return nil, fmt.Errorf("diff fetcher not configured")
+	}
+	
+	return r.diffFetcher.GetPullRequestDiffWithFiles(ctx, 
+		event.Repository.Owner.Login, 
+		event.Repository.Name, 
+		event.Number)
+}
+
+// analyzeDiff analyzes the fetched diff and extracts context
+func (r *DefaultReviewOrchestrator) analyzeDiff(diffResult *github.DiffResult) (*analyzer.ContextualDiff, error) {
+	if r.codeAnalyzer == nil {
+		return nil, fmt.Errorf("code analyzer not configured")
+	}
+	
+	// Parse the raw diff
+	parsedDiff, err := r.codeAnalyzer.ParseDiff(diffResult.RawDiff)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse diff: %w", err)
+	}
+	
+	// Extract context (5 lines as mentioned in CLAUDE.md)
+	contextualDiff, err := r.codeAnalyzer.ExtractContext(parsedDiff, 5)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract context: %w", err)
+	}
+	
+	return contextualDiff, nil
 }

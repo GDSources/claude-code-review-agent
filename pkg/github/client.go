@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -227,4 +228,106 @@ func (c *Client) parseGitHubURL(url string) (owner, repo string, err error) {
 	}
 	
 	return "", "", fmt.Errorf("unsupported GitHub URL format: %s", url)
+}
+
+// Diff-related data structures
+type PullRequestFile struct {
+	Filename     string `json:"filename"`
+	Status       string `json:"status"`
+	Additions    int    `json:"additions"`
+	Deletions    int    `json:"deletions"`
+	Changes      int    `json:"changes"`
+	BlobURL      string `json:"blob_url"`
+	RawURL       string `json:"raw_url"`
+	ContentsURL  string `json:"contents_url"`
+	Patch        string `json:"patch"`
+	SHA          string `json:"sha"`
+	PreviousSHA  string `json:"previous_filename"`
+}
+
+type DiffResult struct {
+	Files     []PullRequestFile `json:"files"`
+	RawDiff   string           `json:"raw_diff"`
+	TotalFiles int             `json:"total_files"`
+}
+
+// makeRequestWithCustomAccept makes a GitHub API request with custom Accept header
+func (c *Client) makeRequestWithCustomAccept(ctx context.Context, method, endpoint, acceptHeader string) (*http.Response, error) {
+	url := c.baseURL + endpoint
+
+	req, err := http.NewRequestWithContext(ctx, method, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("User-Agent", "review-agent/1.0")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		resp.Body.Close()
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+
+	return resp, nil
+}
+
+// GetPullRequestDiff fetches the unified diff for a pull request
+func (c *Client) GetPullRequestDiff(ctx context.Context, owner, repo string, prNumber int) (string, error) {
+	endpoint := fmt.Sprintf("/repos/%s/%s/pulls/%d", owner, repo, prNumber)
+	resp, err := c.makeRequestWithCustomAccept(ctx, "GET", endpoint, "application/vnd.github.v3.diff")
+	if err != nil {
+		return "", fmt.Errorf("failed to get PR diff: %w", err)
+	}
+	defer resp.Body.Close()
+
+	diffBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read diff response: %w", err)
+	}
+
+	return string(diffBytes), nil
+}
+
+// GetPullRequestFiles fetches the list of files changed in a pull request
+func (c *Client) GetPullRequestFiles(ctx context.Context, owner, repo string, prNumber int) ([]PullRequestFile, error) {
+	endpoint := fmt.Sprintf("/repos/%s/%s/pulls/%d/files", owner, repo, prNumber)
+	resp, err := c.makeRequest(ctx, "GET", endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR files: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var files []PullRequestFile
+	if err := json.NewDecoder(resp.Body).Decode(&files); err != nil {
+		return nil, fmt.Errorf("failed to decode PR files response: %w", err)
+	}
+
+	return files, nil
+}
+
+// GetPullRequestDiffWithFiles fetches both the unified diff and file metadata
+func (c *Client) GetPullRequestDiffWithFiles(ctx context.Context, owner, repo string, prNumber int) (*DiffResult, error) {
+	// Fetch the unified diff
+	diff, err := c.GetPullRequestDiff(ctx, owner, repo, prNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get diff: %w", err)
+	}
+
+	// Fetch the file metadata
+	files, err := c.GetPullRequestFiles(ctx, owner, repo, prNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get files: %w", err)
+	}
+
+	return &DiffResult{
+		Files:      files,
+		RawDiff:    diff,
+		TotalFiles: len(files),
+	}, nil
 }

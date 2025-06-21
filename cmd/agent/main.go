@@ -372,8 +372,14 @@ func startWebhookServer(config *ServerConfig) error {
 	// Create workspace manager
 	workspaceManager := review.NewDefaultWorkspaceManager(cloner, fsManager)
 
+	// Create diff fetcher
+	diffFetcher := review.NewGitHubDiffFetcherFromClient(githubClient)
+
+	// Create code analyzer
+	codeAnalyzer := review.NewDefaultAnalyzerAdapter()
+
 	// Create review orchestrator
-	orchestrator := review.NewDefaultReviewOrchestrator(workspaceManager)
+	orchestrator := review.NewDefaultReviewOrchestrator(workspaceManager, diffFetcher, codeAnalyzer)
 
 	// Create event processor
 	eventProcessor := webhook.NewGitHubEventProcessor(orchestrator)

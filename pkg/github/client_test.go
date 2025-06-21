@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -443,5 +444,217 @@ func TestParseGitHubURL(t *testing.T) {
 				t.Errorf("expected repo %s, got %s", tt.expectedRepo, repo)
 			}
 		})
+	}
+}
+
+func TestGetPullRequestDiff(t *testing.T) {
+	tests := []struct {
+		name         string
+		owner        string
+		repo         string
+		prNumber     int
+		mockResponse string
+		mockError    error
+		expectedDiff string
+		expectError  bool
+	}{
+		{
+			name:         "successful diff fetch",
+			owner:        "testowner",
+			repo:         "testrepo",
+			prNumber:     123,
+			mockResponse: "diff --git a/file.go b/file.go\n@@ -1,3 +1,4 @@\n func main() {\n+\tfmt.Println(\"Hello\")\n }\n",
+			expectedDiff: "diff --git a/file.go b/file.go\n@@ -1,3 +1,4 @@\n func main() {\n+\tfmt.Println(\"Hello\")\n }\n",
+			expectError:  false,
+		},
+		{
+			name:        "API error",
+			owner:       "testowner",
+			repo:        "testrepo",
+			prNumber:    123,
+			mockError:   fmt.Errorf("API request failed"),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock HTTP server
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				expectedPath := fmt.Sprintf("/repos/%s/%s/pulls/%d", tt.owner, tt.repo, tt.prNumber)
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+
+				// Check Accept header
+				if r.Header.Get("Accept") != "application/vnd.github.v3.diff" {
+					t.Errorf("expected Accept header 'application/vnd.github.v3.diff', got '%s'", r.Header.Get("Accept"))
+				}
+
+				if tt.mockError != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(tt.mockResponse))
+			}))
+			defer server.Close()
+
+			client := NewClient("test-token")
+			client.baseURL = server.URL
+
+			diff, err := client.GetPullRequestDiff(context.Background(), tt.owner, tt.repo, tt.prNumber)
+
+			if tt.expectError && err == nil {
+				t.Error("expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if !tt.expectError && diff != tt.expectedDiff {
+				t.Errorf("expected diff %q, got %q", tt.expectedDiff, diff)
+			}
+		})
+	}
+}
+
+func TestGetPullRequestFiles(t *testing.T) {
+	tests := []struct {
+		name          string
+		owner         string
+		repo          string
+		prNumber      int
+		mockResponse  string
+		mockError     error
+		expectedFiles int
+		expectError   bool
+	}{
+		{
+			name:     "successful files fetch",
+			owner:    "testowner",
+			repo:     "testrepo",
+			prNumber: 123,
+			mockResponse: `[
+				{
+					"filename": "file1.go",
+					"status": "modified",
+					"additions": 10,
+					"deletions": 5,
+					"changes": 15,
+					"patch": "@@ -1,3 +1,4 @@\n func main() {\n+\tfmt.Println(\"Hello\")\n }\n"
+				},
+				{
+					"filename": "file2.go",
+					"status": "added",
+					"additions": 20,
+					"deletions": 0,
+					"changes": 20,
+					"patch": "@@ -0,0 +1,20 @@\n+package main\n+\n+func newFunc() {\n+}\n"
+				}
+			]`,
+			expectedFiles: 2,
+			expectError:   false,
+		},
+		{
+			name:        "API error",
+			owner:       "testowner",
+			repo:        "testrepo",
+			prNumber:    123,
+			mockError:   fmt.Errorf("API request failed"),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock HTTP server
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				expectedPath := fmt.Sprintf("/repos/%s/%s/pulls/%d/files", tt.owner, tt.repo, tt.prNumber)
+				if r.URL.Path != expectedPath {
+					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
+				}
+
+				if tt.mockError != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(tt.mockResponse))
+			}))
+			defer server.Close()
+
+			client := NewClient("test-token")
+			client.baseURL = server.URL
+
+			files, err := client.GetPullRequestFiles(context.Background(), tt.owner, tt.repo, tt.prNumber)
+
+			if tt.expectError && err == nil {
+				t.Error("expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if !tt.expectError && len(files) != tt.expectedFiles {
+				t.Errorf("expected %d files, got %d", tt.expectedFiles, len(files))
+			}
+			if !tt.expectError && len(files) > 0 {
+				// Verify first file structure
+				file := files[0]
+				if file.Filename != "file1.go" {
+					t.Errorf("expected filename 'file1.go', got '%s'", file.Filename)
+				}
+				if file.Status != "modified" {
+					t.Errorf("expected status 'modified', got '%s'", file.Status)
+				}
+				if file.Additions != 10 {
+					t.Errorf("expected 10 additions, got %d", file.Additions)
+				}
+				if file.Deletions != 5 {
+					t.Errorf("expected 5 deletions, got %d", file.Deletions)
+				}
+			}
+		})
+	}
+}
+
+func TestGetPullRequestDiffWithFiles(t *testing.T) {
+	mockDiff := "diff --git a/file.go b/file.go\n@@ -1,3 +1,4 @@\n func main() {\n+\tfmt.Println(\"Hello\")\n }\n"
+	mockFiles := `[{"filename": "file.go", "status": "modified", "additions": 1, "deletions": 0, "changes": 1}]`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Handle both diff and files endpoints
+		if strings.Contains(r.URL.Path, "/files") {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(mockFiles))
+		} else if r.Header.Get("Accept") == "application/vnd.github.v3.diff" {
+			w.Write([]byte(mockDiff))
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-token")
+	client.baseURL = server.URL
+
+	result, err := client.GetPullRequestDiffWithFiles(context.Background(), "owner", "repo", 123)
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result to be non-nil")
+	}
+	if result.RawDiff != mockDiff {
+		t.Errorf("expected raw diff %q, got %q", mockDiff, result.RawDiff)
+	}
+	if len(result.Files) != 1 {
+		t.Errorf("expected 1 file, got %d", len(result.Files))
+	}
+	if result.TotalFiles != 1 {
+		t.Errorf("expected total files 1, got %d", result.TotalFiles)
 	}
 }
