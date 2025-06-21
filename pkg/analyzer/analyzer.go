@@ -16,28 +16,28 @@ type DiffAnalyzer interface {
 
 // FileDiff represents changes to a single file
 type FileDiff struct {
-	Filename     string      `json:"filename"`
-	Status       string      `json:"status"`       // "added", "modified", "deleted", "renamed"
-	OldFilename  string      `json:"old_filename"` // For renamed files
-	Hunks        []DiffHunk  `json:"hunks"`
-	Additions    int         `json:"additions"`
-	Deletions    int         `json:"deletions"`
-	Language     string      `json:"language"`     // Detected programming language
+	Filename    string     `json:"filename"`
+	Status      string     `json:"status"`       // "added", "modified", "deleted", "renamed"
+	OldFilename string     `json:"old_filename"` // For renamed files
+	Hunks       []DiffHunk `json:"hunks"`
+	Additions   int        `json:"additions"`
+	Deletions   int        `json:"deletions"`
+	Language    string     `json:"language"` // Detected programming language
 }
 
 // DiffHunk represents a contiguous section of changes in a file
 type DiffHunk struct {
-	OldStart    int         `json:"old_start"`
-	OldCount    int         `json:"old_count"`
-	NewStart    int         `json:"new_start"`
-	NewCount    int         `json:"new_count"`
-	Lines       []DiffLine  `json:"lines"`
-	Header      string      `json:"header"`
+	OldStart int        `json:"old_start"`
+	OldCount int        `json:"old_count"`
+	NewStart int        `json:"new_start"`
+	NewCount int        `json:"new_count"`
+	Lines    []DiffLine `json:"lines"`
+	Header   string     `json:"header"`
 }
 
 // DiffLine represents a single line in a diff
 type DiffLine struct {
-	Type      string `json:"type"`      // "context", "added", "removed"
+	Type      string `json:"type"` // "context", "added", "removed"
 	Content   string `json:"content"`
 	OldLineNo int    `json:"old_line_no"`
 	NewLineNo int    `json:"new_line_no"`
@@ -65,11 +65,11 @@ type FileWithContext struct {
 
 // ContextBlock represents a block of code with surrounding context
 type ContextBlock struct {
-	StartLine    int        `json:"start_line"`
-	EndLine      int        `json:"end_line"`
-	Lines        []DiffLine `json:"lines"`
-	ChangeType   string     `json:"change_type"` // "addition", "deletion", "modification"
-	Description  string     `json:"description"` // Human-readable description
+	StartLine   int        `json:"start_line"`
+	EndLine     int        `json:"end_line"`
+	Lines       []DiffLine `json:"lines"`
+	ChangeType  string     `json:"change_type"` // "addition", "deletion", "modification"
+	Description string     `json:"description"` // Human-readable description
 }
 
 // DefaultDiffAnalyzer implements the DiffAnalyzer interface
@@ -102,12 +102,12 @@ func (d *DefaultDiffAnalyzer) ParseDiff(rawDiff string) (*ParsedDiff, error) {
 				}
 				files = append(files, *currentFile)
 			}
-			
+
 			filename, err := extractFilename(line)
 			if err != nil {
 				return nil, fmt.Errorf("failed to extract filename from line %d: %w", i+1, err)
 			}
-			
+
 			currentFile = &FileDiff{
 				Filename: filename,
 				Status:   "modified",
@@ -137,12 +137,12 @@ func (d *DefaultDiffAnalyzer) ParseDiff(rawDiff string) (*ParsedDiff, error) {
 			if currentFile != nil && currentHunk != nil {
 				currentFile.Hunks = append(currentFile.Hunks, *currentHunk)
 			}
-			
+
 			hunk, err := parseHunkHeader(line)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse hunk header at line %d: %w", i+1, err)
 			}
-			
+
 			currentHunk = hunk
 			oldLineNo = hunk.OldStart
 			newLineNo = hunk.NewStart
@@ -212,7 +212,7 @@ func (d *DefaultDiffAnalyzer) ExtractContext(parsedDiff *ParsedDiff, contextLine
 	}
 
 	filesWithContext := make([]FileWithContext, len(parsedDiff.Files))
-	
+
 	for i, file := range parsedDiff.Files {
 		fileWithContext := FileWithContext{
 			FileDiff:      file,
@@ -243,13 +243,13 @@ func extractFilename(line string) (string, error) {
 	if len(parts) < 4 {
 		return "", fmt.Errorf("invalid diff header format")
 	}
-	
+
 	// Extract filename from "a/path/to/file"
 	aPath := parts[2]
 	if strings.HasPrefix(aPath, "a/") {
 		return aPath[2:], nil
 	}
-	
+
 	return aPath, nil
 }
 
@@ -258,7 +258,7 @@ func parseHunkHeader(line string) (*DiffHunk, error) {
 	// Regular expression to parse hunk header
 	re := regexp.MustCompile(`@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)`)
 	matches := re.FindStringSubmatch(line)
-	
+
 	if len(matches) < 4 {
 		return nil, fmt.Errorf("invalid hunk header format: %s", line)
 	}
@@ -307,37 +307,37 @@ func parseHunkHeader(line string) (*DiffHunk, error) {
 // detectLanguage detects programming language from filename
 func detectLanguage(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
-	
+
 	langMap := map[string]string{
-		".go":   "go",
-		".js":   "javascript",
-		".ts":   "typescript",
-		".tsx":  "typescript",
-		".jsx":  "javascript",
-		".py":   "python",
-		".java": "java",
-		".cpp":  "cpp",
-		".c":    "c",
-		".h":    "c",
-		".hpp":  "cpp",
-		".rs":   "rust",
-		".rb":   "ruby",
-		".php":  "php",
-		".cs":   "csharp",
+		".go":    "go",
+		".js":    "javascript",
+		".ts":    "typescript",
+		".tsx":   "typescript",
+		".jsx":   "javascript",
+		".py":    "python",
+		".java":  "java",
+		".cpp":   "cpp",
+		".c":     "c",
+		".h":     "c",
+		".hpp":   "cpp",
+		".rs":    "rust",
+		".rb":    "ruby",
+		".php":   "php",
+		".cs":    "csharp",
 		".swift": "swift",
-		".kt":   "kotlin",
+		".kt":    "kotlin",
 		".scala": "scala",
-		".sh":   "bash",
-		".sql":  "sql",
-		".md":   "markdown",
-		".yaml": "yaml",
-		".yml":  "yaml",
-		".json": "json",
-		".xml":  "xml",
-		".html": "html",
-		".css":  "css",
-		".scss": "scss",
-		".sass": "sass",
+		".sh":    "bash",
+		".sql":   "sql",
+		".md":    "markdown",
+		".yaml":  "yaml",
+		".yml":   "yaml",
+		".json":  "json",
+		".xml":   "xml",
+		".html":  "html",
+		".css":   "css",
+		".scss":  "scss",
+		".sass":  "sass",
 	}
 
 	if lang, exists := langMap[ext]; exists {
@@ -351,7 +351,7 @@ func detectLanguage(filename string) string {
 func extractContextBlocks(hunk DiffHunk, contextLines int) []ContextBlock {
 	var blocks []ContextBlock
 	var currentBlock *ContextBlock
-	
+
 	for i, line := range hunk.Lines {
 		if line.Type == "added" || line.Type == "removed" {
 			if currentBlock == nil {
@@ -360,15 +360,15 @@ func extractContextBlocks(hunk DiffHunk, contextLines int) []ContextBlock {
 				currentBlock = &ContextBlock{
 					Lines: []DiffLine{},
 				}
-				
+
 				// Add preceding context
 				for j := startIdx; j < i; j++ {
 					currentBlock.Lines = append(currentBlock.Lines, hunk.Lines[j])
 				}
 			}
-			
+
 			currentBlock.Lines = append(currentBlock.Lines, line)
-			
+
 			// Determine change type
 			if line.Type == "added" {
 				if currentBlock.ChangeType == "" {
@@ -386,7 +386,7 @@ func extractContextBlocks(hunk DiffHunk, contextLines int) []ContextBlock {
 		} else if currentBlock != nil {
 			// Context line after changes
 			currentBlock.Lines = append(currentBlock.Lines, line)
-			
+
 			// Check if we've reached the end of context
 			nextChangeIdx := findNextChange(hunk.Lines, i+1)
 			if nextChangeIdx == -1 || nextChangeIdx > i+contextLines {
@@ -397,13 +397,13 @@ func extractContextBlocks(hunk DiffHunk, contextLines int) []ContextBlock {
 			}
 		}
 	}
-	
+
 	// Finalize any remaining block
 	if currentBlock != nil {
 		finalizeContextBlock(currentBlock)
 		blocks = append(blocks, *currentBlock)
 	}
-	
+
 	return blocks
 }
 
@@ -429,7 +429,7 @@ func finalizeContextBlock(block *ContextBlock) {
 	if len(block.Lines) == 0 {
 		return
 	}
-	
+
 	// Set line numbers
 	for _, line := range block.Lines {
 		if line.OldLineNo > 0 {
@@ -449,7 +449,7 @@ func finalizeContextBlock(block *ContextBlock) {
 			}
 		}
 	}
-	
+
 	// Generate description
 	switch block.ChangeType {
 	case "addition":

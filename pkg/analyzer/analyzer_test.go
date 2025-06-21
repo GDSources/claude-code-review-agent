@@ -6,20 +6,20 @@ import (
 
 func TestParseDiff(t *testing.T) {
 	tests := []struct {
-		name         string
-		rawDiff      string
-		expectedFiles int
-		expectedAdded int
+		name            string
+		rawDiff         string
+		expectedFiles   int
+		expectedAdded   int
 		expectedRemoved int
-		expectError  bool
+		expectError     bool
 	}{
 		{
-			name:          "empty diff",
-			rawDiff:       "",
-			expectedFiles: 0,
-			expectedAdded: 0,
+			name:            "empty diff",
+			rawDiff:         "",
+			expectedFiles:   0,
+			expectedAdded:   0,
 			expectedRemoved: 0,
-			expectError:   false,
+			expectError:     false,
 		},
 		{
 			name: "single file modification",
@@ -33,10 +33,10 @@ index 1234567..abcdefg 100644
  func main() {
 +	fmt.Println("Hello, World!")
  }`,
-			expectedFiles: 1,
-			expectedAdded: 1,
+			expectedFiles:   1,
+			expectedAdded:   1,
 			expectedRemoved: 0,
-			expectError:   false,
+			expectError:     false,
 		},
 		{
 			name: "multiple files with various changes",
@@ -71,10 +71,10 @@ index 4444444..0000000
 @@ -1,2 +0,0 @@
 -// This file is deleted
 -package old`,
-			expectedFiles: 3,
-			expectedAdded: 5,
+			expectedFiles:   3,
+			expectedAdded:   5,
 			expectedRemoved: 4,
-			expectError:   false,
+			expectError:     false,
 		},
 	}
 
@@ -129,7 +129,7 @@ index 4444444..0000000
 						if file.Status != "modified" {
 							t.Errorf("expected status 'modified', got '%s'", file.Status)
 						}
-						
+
 						// Test second file (added)
 						if len(parsed.Files) > 1 {
 							file2 := parsed.Files[1]
@@ -137,7 +137,7 @@ index 4444444..0000000
 								t.Errorf("expected file2 status 'added', got '%s'", file2.Status)
 							}
 						}
-						
+
 						// Test third file (deleted)
 						if len(parsed.Files) > 2 {
 							file3 := parsed.Files[2]
@@ -221,7 +221,7 @@ func TestDetectLanguage(t *testing.T) {
 		t.Run(tt.filename, func(t *testing.T) {
 			result := detectLanguage(tt.filename)
 			if result != tt.expectedLanguage {
-				t.Errorf("expected language '%s' for '%s', got '%s'", 
+				t.Errorf("expected language '%s' for '%s', got '%s'",
 					tt.expectedLanguage, tt.filename, result)
 			}
 		})
@@ -230,40 +230,40 @@ func TestDetectLanguage(t *testing.T) {
 
 func TestParseHunkHeader(t *testing.T) {
 	tests := []struct {
-		name        string
-		header      string
+		name             string
+		header           string
 		expectedOldStart int
 		expectedOldCount int
 		expectedNewStart int
 		expectedNewCount int
-		expectError bool
+		expectError      bool
 	}{
 		{
-			name:        "basic hunk header",
-			header:      "@@ -1,4 +1,5 @@",
+			name:             "basic hunk header",
+			header:           "@@ -1,4 +1,5 @@",
 			expectedOldStart: 1,
 			expectedOldCount: 4,
 			expectedNewStart: 1,
 			expectedNewCount: 5,
-			expectError: false,
+			expectError:      false,
 		},
 		{
-			name:        "hunk header with function name",
-			header:      "@@ -10,3 +12,4 @@ func main() {",
+			name:             "hunk header with function name",
+			header:           "@@ -10,3 +12,4 @@ func main() {",
 			expectedOldStart: 10,
 			expectedOldCount: 3,
 			expectedNewStart: 12,
 			expectedNewCount: 4,
-			expectError: false,
+			expectError:      false,
 		},
 		{
-			name:        "hunk header without count",
-			header:      "@@ -1 +1,2 @@",
+			name:             "hunk header without count",
+			header:           "@@ -1 +1,2 @@",
 			expectedOldStart: 1,
 			expectedOldCount: 1,
 			expectedNewStart: 1,
 			expectedNewCount: 2,
-			expectError: false,
+			expectError:      false,
 		},
 		{
 			name:        "invalid header",

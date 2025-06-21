@@ -9,11 +9,11 @@ import (
 )
 
 type mockGitHubCloner struct {
-	shouldFail      bool
-	error           error
-	clonedRepos     []string
-	clonedPaths     []string
-	checkedOutPaths []string
+	shouldFail         bool
+	error              error
+	clonedRepos        []string
+	clonedPaths        []string
+	checkedOutPaths    []string
 	checkedOutBranches []string
 }
 

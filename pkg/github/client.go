@@ -172,7 +172,7 @@ func (c *Client) configureGitAuth(repoPath string) error {
 	}
 
 	currentURL := strings.TrimSpace(string(output))
-	
+
 	// Parse the GitHub repository from the URL
 	owner, repo, err := c.parseGitHubURL(currentURL)
 	if err != nil {
@@ -194,11 +194,11 @@ func (c *Client) parseGitHubURL(url string) (owner, repo string, err error) {
 	// https://github.com/owner/repo.git
 	// https://x-access-token:token@github.com/owner/repo.git
 	// git@github.com:owner/repo.git
-	
+
 	// Clean up the URL
 	url = strings.TrimSpace(url)
 	url = strings.TrimSuffix(url, ".git")
-	
+
 	// Handle HTTPS URLs
 	if strings.Contains(url, "github.com/") {
 		// Find the path after github.com/
@@ -206,16 +206,16 @@ func (c *Client) parseGitHubURL(url string) (owner, repo string, err error) {
 		if len(parts) < 2 {
 			return "", "", fmt.Errorf("invalid GitHub URL format")
 		}
-		
+
 		path := parts[1]
 		pathParts := strings.Split(path, "/")
 		if len(pathParts) < 2 {
 			return "", "", fmt.Errorf("invalid GitHub URL format")
 		}
-		
+
 		return pathParts[0], pathParts[1], nil
 	}
-	
+
 	// Handle SSH URLs (git@github.com:owner/repo)
 	if strings.HasPrefix(url, "git@github.com:") {
 		path := strings.TrimPrefix(url, "git@github.com:")
@@ -223,32 +223,32 @@ func (c *Client) parseGitHubURL(url string) (owner, repo string, err error) {
 		if len(pathParts) < 2 {
 			return "", "", fmt.Errorf("invalid GitHub SSH URL format")
 		}
-		
+
 		return pathParts[0], pathParts[1], nil
 	}
-	
+
 	return "", "", fmt.Errorf("unsupported GitHub URL format: %s", url)
 }
 
 // Diff-related data structures
 type PullRequestFile struct {
-	Filename     string `json:"filename"`
-	Status       string `json:"status"`
-	Additions    int    `json:"additions"`
-	Deletions    int    `json:"deletions"`
-	Changes      int    `json:"changes"`
-	BlobURL      string `json:"blob_url"`
-	RawURL       string `json:"raw_url"`
-	ContentsURL  string `json:"contents_url"`
-	Patch        string `json:"patch"`
-	SHA          string `json:"sha"`
-	PreviousSHA  string `json:"previous_filename"`
+	Filename    string `json:"filename"`
+	Status      string `json:"status"`
+	Additions   int    `json:"additions"`
+	Deletions   int    `json:"deletions"`
+	Changes     int    `json:"changes"`
+	BlobURL     string `json:"blob_url"`
+	RawURL      string `json:"raw_url"`
+	ContentsURL string `json:"contents_url"`
+	Patch       string `json:"patch"`
+	SHA         string `json:"sha"`
+	PreviousSHA string `json:"previous_filename"`
 }
 
 type DiffResult struct {
-	Files     []PullRequestFile `json:"files"`
-	RawDiff   string           `json:"raw_diff"`
-	TotalFiles int             `json:"total_files"`
+	Files      []PullRequestFile `json:"files"`
+	RawDiff    string            `json:"raw_diff"`
+	TotalFiles int               `json:"total_files"`
 }
 
 // makeRequestWithCustomAccept makes a GitHub API request with custom Accept header

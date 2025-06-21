@@ -170,26 +170,26 @@ func (m *mockCommandExecutor) ExecuteInDirWithOutput(dir, command string, args .
 	m.commands = append(m.commands, command)
 	m.args = append(m.args, args)
 	m.dirs = append(m.dirs, dir)
-	
+
 	if m.error != nil {
 		return nil, m.error
 	}
-	
+
 	// Build command key for lookup
 	cmdKey := command
 	for _, arg := range args {
 		cmdKey += " " + arg
 	}
-	
+
 	if output, exists := m.outputs[cmdKey]; exists {
 		return []byte(output), nil
 	}
-	
+
 	// Default output for git remote get-url origin
 	if command == "git" && len(args) >= 3 && args[0] == "remote" && args[1] == "get-url" && args[2] == "origin" {
 		return []byte("https://github.com/testowner/testrepo.git\n"), nil
 	}
-	
+
 	return []byte(""), nil
 }
 
@@ -301,7 +301,7 @@ func TestCheckoutBranch(t *testing.T) {
 		expectedError bool
 		expectedCmds  []string
 		expectedDirs  []string
-		setupError    bool  // Error during authentication setup
+		setupError    bool // Error during authentication setup
 	}{
 		{
 			name:         "successful checkout existing branch",
@@ -313,7 +313,7 @@ func TestCheckoutBranch(t *testing.T) {
 		},
 		{
 			name:          "authentication setup fails",
-			repoPath:      "/tmp/test-repo", 
+			repoPath:      "/tmp/test-repo",
 			branch:        "feature-branch",
 			mockError:     fmt.Errorf("auth failed"),
 			expectedError: true,
@@ -367,7 +367,7 @@ func TestCheckoutBranch(t *testing.T) {
 
 func TestParseGitHubURL(t *testing.T) {
 	client := NewClient("test-token")
-	
+
 	tests := []struct {
 		name          string
 		url           string

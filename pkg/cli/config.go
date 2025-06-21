@@ -16,7 +16,7 @@ func NewEnvLoader() *EnvLoader {
 	// Define common search paths for .env files
 	currentDir, _ := os.Getwd()
 	homeDir, _ := os.UserHomeDir()
-	
+
 	return &EnvLoader{
 		searchPaths: []string{
 			currentDir,
@@ -33,14 +33,14 @@ func (e *EnvLoader) LoadEnvFile() error {
 		if err == nil {
 			return nil // Successfully loaded from this file
 		}
-		
+
 		// If file exists but has parsing errors, return the error
 		if !os.IsNotExist(err) {
 			return err
 		}
 		// If file doesn't exist, continue to next search path
 	}
-	
+
 	// No .env file found, which is okay
 	return nil
 }
@@ -51,28 +51,28 @@ func (e *EnvLoader) loadFromFile(filename string) error {
 		return err
 	}
 	defer file.Close()
-	
+
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
-	
+
 	for scanner.Scan() {
 		lineNum++
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		
+
 		if err := e.parseLine(line, filename, lineNum); err != nil {
 			return err
 		}
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("error reading %s: %w", filename, err)
 	}
-	
+
 	return nil
 }
 
@@ -82,10 +82,10 @@ func (e *EnvLoader) parseLine(line, filename string, lineNum int) error {
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid format in %s at line %d: %s", filename, lineNum, line)
 	}
-	
+
 	key := strings.TrimSpace(parts[0])
 	value := strings.TrimSpace(parts[1])
-	
+
 	// Remove quotes if present
 	if len(value) >= 2 {
 		if (strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"")) ||
@@ -93,12 +93,12 @@ func (e *EnvLoader) parseLine(line, filename string, lineNum int) error {
 			value = value[1 : len(value)-1]
 		}
 	}
-	
+
 	// Only set if not already set (environment variables take precedence)
 	if os.Getenv(key) == "" {
 		os.Setenv(key, value)
 	}
-	
+
 	return nil
 }
 
@@ -107,9 +107,9 @@ func (e *EnvLoader) CreateSampleEnvFile() error {
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
-	
+
 	envFile := filepath.Join(currentDir, ".env.example")
-	
+
 	content := `# Review Agent Configuration
 # Copy this file to .env and update with your actual keys
 
@@ -124,6 +124,6 @@ CLAUDE_API_KEY=your_claude_api_key_here
 # Optional: Webhook secret for server mode
 # WEBHOOK_SECRET=your_webhook_secret_here
 `
-	
+
 	return os.WriteFile(envFile, []byte(content), 0644)
 }

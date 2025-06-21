@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/your-org/review-agent/pkg/github"
+	"github.com/your-org/review-agent/pkg/llm"
 	"github.com/your-org/review-agent/pkg/review"
 	"github.com/your-org/review-agent/pkg/webhook"
 )
@@ -43,8 +44,25 @@ func NewPRReviewer(config *ReviewConfig) *PRReviewer {
 	// Create code analyzer
 	codeAnalyzer := review.NewDefaultAnalyzerAdapter()
 
-	// Create review orchestrator
-	orchestrator := review.NewDefaultReviewOrchestrator(workspaceManager, diffFetcher, codeAnalyzer)
+	// Create Claude client for LLM reviews
+	claudeConfig := llm.ClaudeConfig{
+		APIKey: config.ClaudeAPIKey,
+		Model:  llm.DefaultClaudeModel,
+		MaxTokens: llm.DefaultClaudeMaxTokens,
+		Temperature: llm.DefaultClaudeTemperature,
+		BaseURL: llm.DefaultClaudeBaseURL,
+		Timeout: llm.DefaultTimeoutSeconds,
+	}
+	
+	claudeClient, err := llm.NewClaudeClient(claudeConfig)
+	if err != nil {
+		// For now, log the error and continue without LLM - in production you might want to fail here
+		fmt.Printf("Warning: Failed to create Claude client: %v\n", err)
+		claudeClient = nil
+	}
+
+	// Create review orchestrator with LLM integration
+	orchestrator := review.NewReviewOrchestratorWithLLM(workspaceManager, diffFetcher, codeAnalyzer, claudeClient)
 
 	return &PRReviewer{
 		config:       config,
@@ -117,14 +135,14 @@ func (r *PRReviewer) fetchPREvent(owner, repo string, prNumber int) (*webhook.Pu
 
 // GitHub API response structures
 type GitHubPRResponse struct {
-	ID         int                 `json:"id"`
-	Number     int                 `json:"number"`
-	Title      string              `json:"title"`
-	State      string              `json:"state"`
-	Head       GitHubBranchRef     `json:"head"`
-	Base       GitHubBranchRef     `json:"base"`
-	User       GitHubUser          `json:"user"`
-	Repository GitHubRepository    `json:"head_repository"`
+	ID         int              `json:"id"`
+	Number     int              `json:"number"`
+	Title      string           `json:"title"`
+	State      string           `json:"state"`
+	Head       GitHubBranchRef  `json:"head"`
+	Base       GitHubBranchRef  `json:"base"`
+	User       GitHubUser       `json:"user"`
+	Repository GitHubRepository `json:"head_repository"`
 }
 
 type GitHubBranchRef struct {
@@ -145,7 +163,7 @@ type GitHubRepository struct {
 
 func (r *PRReviewer) fetchGitHubPR(ctx context.Context, owner, repo string, prNumber int) (*GitHubPRResponse, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls/%d", owner, repo, prNumber)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

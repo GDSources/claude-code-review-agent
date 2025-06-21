@@ -53,8 +53,8 @@ type CodeAnalyzer interface {
 
 // ReviewData contains all information needed for LLM analysis
 type ReviewData struct {
-	Event          *PullRequestEvent      `json:"event"`
-	Workspace      *Workspace             `json:"workspace"`
-	DiffResult     *github.DiffResult     `json:"diff_result"`
+	Event          *PullRequestEvent        `json:"event"`
+	Workspace      *Workspace               `json:"workspace"`
+	DiffResult     *github.DiffResult       `json:"diff_result"`
 	ContextualDiff *analyzer.ContextualDiff `json:"contextual_diff"`
 }

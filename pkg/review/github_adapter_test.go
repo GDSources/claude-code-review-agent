@@ -55,7 +55,7 @@ func (m *mockGitHubClient) GetPullRequestDiffWithFiles(ctx context.Context, owne
 	if m.shouldFail {
 		return nil, m.error
 	}
-	
+
 	// Return a mock diff result
 	return &github.DiffResult{
 		Files:      []github.PullRequestFile{},

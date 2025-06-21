@@ -9,6 +9,7 @@ import (
 
 	"github.com/your-org/review-agent/pkg/cli"
 	"github.com/your-org/review-agent/pkg/github"
+	"github.com/your-org/review-agent/pkg/llm"
 	"github.com/your-org/review-agent/pkg/review"
 	"github.com/your-org/review-agent/pkg/webhook"
 )
@@ -141,7 +142,7 @@ Examples:
 
 func runInit(args []string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
-	
+
 	fs.Usage = func() {
 		fmt.Print(`Create a sample .env file for configuration
 
@@ -153,18 +154,18 @@ sample configuration values. Copy it to .env and update with your actual
 API keys.
 `)
 	}
-	
+
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	envLoader := cli.NewEnvLoader()
 	if err := envLoader.CreateSampleEnvFile(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create .env.example file: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	fmt.Println("✓ Created .env.example file")
 	fmt.Println("📝 Copy it to .env and update with your actual API keys:")
 	fmt.Println("   cp .env.example .env")
@@ -196,7 +197,7 @@ func loadEnvConfig(config *Config) error {
 	if err := envLoader.LoadEnvFile(); err != nil {
 		return fmt.Errorf("failed to load .env file: %w", err)
 	}
-	
+
 	// Then apply environment variables (higher precedence than .env file)
 	if config.GitHubToken == "" {
 		config.GitHubToken = os.Getenv("GITHUB_TOKEN")
@@ -207,7 +208,7 @@ func loadEnvConfig(config *Config) error {
 	if config.WebhookSecret == "" {
 		config.WebhookSecret = os.Getenv("WEBHOOK_SECRET")
 	}
-	
+
 	return nil
 }
 
@@ -319,7 +320,7 @@ func loadServerConfig(config *ServerConfig) error {
 	if err := envLoader.LoadEnvFile(); err != nil {
 		return fmt.Errorf("failed to load .env file: %w", err)
 	}
-	
+
 	// Then apply environment variables (higher precedence than .env file)
 	if config.GitHubToken == "" {
 		config.GitHubToken = os.Getenv("GITHUB_TOKEN")
@@ -330,14 +331,14 @@ func loadServerConfig(config *ServerConfig) error {
 	if config.WebhookSecret == "" {
 		config.WebhookSecret = os.Getenv("WEBHOOK_SECRET")
 	}
-	
+
 	// Port can also come from env var
 	if portStr := os.Getenv("PORT"); portStr != "" && config.Port == 8080 { // Only override default
 		if port, err := strconv.Atoi(portStr); err == nil {
 			config.Port = port
 		}
 	}
-	
+
 	return nil
 }
 
@@ -378,8 +379,30 @@ func startWebhookServer(config *ServerConfig) error {
 	// Create code analyzer
 	codeAnalyzer := review.NewDefaultAnalyzerAdapter()
 
-	// Create review orchestrator
-	orchestrator := review.NewDefaultReviewOrchestrator(workspaceManager, diffFetcher, codeAnalyzer)
+	// Create Claude client for LLM reviews
+	var claudeClient llm.CodeReviewer
+	if config.ClaudeAPIKey != "" {
+		claudeConfig := llm.ClaudeConfig{
+			APIKey:      config.ClaudeAPIKey,
+			Model:       llm.DefaultClaudeModel,
+			MaxTokens:   llm.DefaultClaudeMaxTokens,
+			Temperature: llm.DefaultClaudeTemperature,
+			BaseURL:     llm.DefaultClaudeBaseURL,
+			Timeout:     llm.DefaultTimeoutSeconds,
+		}
+		
+		var err error
+		claudeClient, err = llm.NewClaudeClient(claudeConfig)
+		if err != nil {
+			fmt.Printf("Warning: Failed to create Claude client: %v\n", err)
+			claudeClient = nil
+		}
+	} else {
+		fmt.Printf("Warning: CLAUDE_API_KEY not provided, LLM reviews will be skipped\n")
+	}
+
+	// Create review orchestrator with LLM integration
+	orchestrator := review.NewReviewOrchestratorWithLLM(workspaceManager, diffFetcher, codeAnalyzer, claudeClient)
 
 	// Create event processor
 	eventProcessor := webhook.NewGitHubEventProcessor(orchestrator)

@@ -10,7 +10,8 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(make test:*)",
-      "Bash(make review-dev-docker:*)"
+      "Bash(make review-dev-docker:*)",
+      "Bash(go vet:*)"
     ],
     "deny": []
   }
