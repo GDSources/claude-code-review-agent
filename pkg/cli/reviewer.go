@@ -50,16 +50,16 @@ func NewPRReviewer(config *ReviewConfig) *PRReviewer {
 	if model == "" {
 		model = llm.DefaultClaudeModel
 	}
-	
+
 	claudeConfig := llm.ClaudeConfig{
-		APIKey: config.ClaudeAPIKey,
-		Model:  model,
-		MaxTokens: llm.DefaultClaudeMaxTokens,
+		APIKey:      config.ClaudeAPIKey,
+		Model:       model,
+		MaxTokens:   llm.DefaultClaudeMaxTokens,
 		Temperature: llm.DefaultClaudeTemperature,
-		BaseURL: llm.DefaultClaudeBaseURL,
-		Timeout: llm.DefaultTimeoutSeconds,
+		BaseURL:     llm.DefaultClaudeBaseURL,
+		Timeout:     llm.DefaultTimeoutSeconds,
 	}
-	
+
 	claudeClient, err := llm.NewClaudeClient(claudeConfig)
 	if err != nil {
 		// For now, log the error and continue without LLM - in production you might want to fail here

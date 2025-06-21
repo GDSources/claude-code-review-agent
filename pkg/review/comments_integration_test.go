@@ -10,10 +10,10 @@ import (
 
 func TestCommentPostingWorkflow_EndToEnd(t *testing.T) {
 	// Create full end-to-end test with all components
-	
+
 	// Mock workspace manager
 	mockWM := &mockWorkspaceManager{}
-	
+
 	// Mock diff fetcher
 	mockDF := &mockDiffFetcher{
 		diffResult: &github.DiffResult{
@@ -21,7 +21,7 @@ func TestCommentPostingWorkflow_EndToEnd(t *testing.T) {
 			TotalFiles: 1,
 		},
 	}
-	
+
 	// Mock code analyzer
 	mockCA := &mockCodeAnalyzer{
 		contextualDiff: &analyzer.ContextualDiff{
@@ -36,7 +36,7 @@ func TestCommentPostingWorkflow_EndToEnd(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Mock LLM client that generates comments
 	mockLLM := &mockLLMClientWithComments{
 		reviewResponse: &llm.ReviewResponse{
@@ -49,7 +49,7 @@ func TestCommentPostingWorkflow_EndToEnd(t *testing.T) {
 					Type:       llm.CommentTypeSuggestion,
 				},
 				{
-					Filename:   "main.go", 
+					Filename:   "main.go",
 					LineNumber: 0, // Should be skipped (general comment)
 					Comment:    "Overall file looks good",
 					Severity:   llm.SeverityInfo,
@@ -70,14 +70,14 @@ func TestCommentPostingWorkflow_EndToEnd(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Mock GitHub client that tracks comment creation
 	mockGitHub := &mockGitHubCommentClient{}
-	
+
 	// Create orchestrator with comment posting
 	orchestrator := NewReviewOrchestratorWithComments(
 		mockWM, mockDF, mockCA, mockLLM, mockGitHub)
-	
+
 	// Create test event
 	event := &PullRequestEvent{
 		Action: "opened",
@@ -104,18 +104,18 @@ func TestCommentPostingWorkflow_EndToEnd(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Execute the review
 	err := orchestrator.HandlePullRequest(event)
 	if err != nil {
 		t.Fatalf("HandlePullRequest failed: %v", err)
 	}
-	
+
 	// Verify that only valid line comments were posted (skipping line 0)
 	if len(mockGitHub.createCommentCalls) != 2 {
 		t.Errorf("expected 2 comment creation calls, got %d", len(mockGitHub.createCommentCalls))
 	}
-	
+
 	// Verify first comment
 	firstCall := mockGitHub.createCommentCalls[0]
 	if firstCall.owner != "testorg" {
@@ -139,7 +139,7 @@ func TestCommentPostingWorkflow_EndToEnd(t *testing.T) {
 	if firstCall.comment.CommitID != "abc123def456" {
 		t.Errorf("expected commit ID 'abc123def456', got '%s'", firstCall.comment.CommitID)
 	}
-	
+
 	// Verify second comment
 	secondCall := mockGitHub.createCommentCalls[1]
 	if secondCall.comment.Body != "Potential memory leak here" {
@@ -152,7 +152,7 @@ func TestCommentPostingWorkflow_EndToEnd(t *testing.T) {
 
 func TestCommentPostingWorkflow_PartialFailure(t *testing.T) {
 	// Test that workflow continues even if some comments fail to post
-	
+
 	mockWM := &mockWorkspaceManager{}
 	mockDF := &mockDiffFetcher{
 		diffResult: &github.DiffResult{RawDiff: "test", TotalFiles: 1},
@@ -162,7 +162,7 @@ func TestCommentPostingWorkflow_PartialFailure(t *testing.T) {
 			ParsedDiff: &analyzer.ParsedDiff{TotalFiles: 1},
 		},
 	}
-	
+
 	// LLM generates one comment
 	mockLLM := &mockLLMClientWithComments{
 		reviewResponse: &llm.ReviewResponse{
@@ -177,24 +177,24 @@ func TestCommentPostingWorkflow_PartialFailure(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// GitHub client that fails to post comments
 	mockGitHub := &mockGitHubCommentClient{
 		shouldFailComment: true,
 		commentError:      newError("GitHub API rate limit exceeded"),
 	}
-	
+
 	orchestrator := NewReviewOrchestratorWithComments(
 		mockWM, mockDF, mockCA, mockLLM, mockGitHub)
-	
+
 	event := createTestPullRequestEvent()
-	
+
 	// Should not fail even if comment posting fails
 	err := orchestrator.HandlePullRequest(event)
 	if err != nil {
 		t.Errorf("HandlePullRequest should not fail when comment posting fails, got: %v", err)
 	}
-	
+
 	// Verify comment posting was attempted
 	if len(mockGitHub.createCommentCalls) != 1 {
 		t.Errorf("expected 1 comment creation attempt, got %d", len(mockGitHub.createCommentCalls))
@@ -203,7 +203,7 @@ func TestCommentPostingWorkflow_PartialFailure(t *testing.T) {
 
 func TestCommentPostingWorkflow_NoLLMComments(t *testing.T) {
 	// Test workflow when LLM doesn't generate any comments
-	
+
 	mockWM := &mockWorkspaceManager{}
 	mockDF := &mockDiffFetcher{
 		diffResult: &github.DiffResult{RawDiff: "test", TotalFiles: 1},
@@ -213,7 +213,7 @@ func TestCommentPostingWorkflow_NoLLMComments(t *testing.T) {
 			ParsedDiff: &analyzer.ParsedDiff{TotalFiles: 1},
 		},
 	}
-	
+
 	// LLM generates no comments
 	mockLLM := &mockLLMClientWithComments{
 		reviewResponse: &llm.ReviewResponse{
@@ -221,20 +221,20 @@ func TestCommentPostingWorkflow_NoLLMComments(t *testing.T) {
 			Summary:  "No issues found",
 		},
 	}
-	
+
 	mockGitHub := &mockGitHubCommentClient{}
-	
+
 	orchestrator := NewReviewOrchestratorWithComments(
 		mockWM, mockDF, mockCA, mockLLM, mockGitHub)
-	
+
 	event := createTestPullRequestEvent()
-	
+
 	// Should succeed without posting any comments
 	err := orchestrator.HandlePullRequest(event)
 	if err != nil {
 		t.Errorf("HandlePullRequest should succeed with no comments, got: %v", err)
 	}
-	
+
 	// Verify no comment posting was attempted
 	if len(mockGitHub.createCommentCalls) != 0 {
 		t.Errorf("expected 0 comment creation attempts, got %d", len(mockGitHub.createCommentCalls))

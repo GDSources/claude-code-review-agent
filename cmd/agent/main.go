@@ -415,7 +415,7 @@ func startWebhookServer(config *ServerConfig) error {
 		if model == "" {
 			model = llm.DefaultClaudeModel
 		}
-		
+
 		claudeConfig := llm.ClaudeConfig{
 			APIKey:      config.ClaudeAPIKey,
 			Model:       model,
@@ -424,7 +424,7 @@ func startWebhookServer(config *ServerConfig) error {
 			BaseURL:     llm.DefaultClaudeBaseURL,
 			Timeout:     llm.DefaultTimeoutSeconds,
 		}
-		
+
 		var err error
 		claudeClient, err = llm.NewClaudeClient(claudeConfig)
 		if err != nil {

@@ -130,12 +130,12 @@ const (
 
 // Available Claude models
 const (
-	ClaudeHaiku35        = "claude-3-5-haiku-20241022"     // Fast, cost-effective
-	ClaudeSonnet35       = "claude-3-5-sonnet-20241022"   // Balanced performance
-	ClaudeSonnet35Latest = "claude-3-5-sonnet-20250106"   // Latest Sonnet 3.5
-	ClaudeHaiku37        = "claude-3-7-haiku-20250109"    // Claude 3.7 Haiku - Fast and efficient
-	ClaudeSonnet37       = "claude-3-7-sonnet-20250109"   // Claude 3.7 Sonnet - Enhanced capabilities
-	ClaudeSonnet4        = "claude-sonnet-4-20250514"     // Most capable, highest cost (recommended)
+	ClaudeHaiku35        = "claude-3-5-haiku-20241022"  // Fast, cost-effective
+	ClaudeSonnet35       = "claude-3-5-sonnet-20241022" // Balanced performance
+	ClaudeSonnet35Latest = "claude-3-5-sonnet-20250106" // Latest Sonnet 3.5
+	ClaudeHaiku37        = "claude-3-7-haiku-20250109"  // Claude 3.7 Haiku - Fast and efficient
+	ClaudeSonnet37       = "claude-3-7-sonnet-20250109" // Claude 3.7 Sonnet - Enhanced capabilities
+	ClaudeSonnet4        = "claude-sonnet-4-20250514"   // Most capable, highest cost (recommended)
 )
 
 // AvailableClaudeModels returns a list of supported Claude models

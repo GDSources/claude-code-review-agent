@@ -15,9 +15,9 @@ import (
 
 func TestNewClaudeClient(t *testing.T) {
 	tests := []struct {
-		name        string
-		config      ClaudeConfig
-		expectError bool
+		name          string
+		config        ClaudeConfig
+		expectError   bool
 		errorContains string
 	}{
 		{
@@ -244,10 +244,10 @@ func TestClaudeClient_ReviewCode(t *testing.T) {
 
 func TestClaudeClient_ErrorHandling(t *testing.T) {
 	tests := []struct {
-		name           string
-		statusCode     int
-		responseBody   string
-		expectedError  string
+		name          string
+		statusCode    int
+		responseBody  string
+		expectedError string
 	}{
 		{
 			name:          "authentication error",
@@ -582,11 +582,11 @@ func TestParseJSONResponse(t *testing.T) {
 	client := &ClaudeClient{}
 
 	tests := []struct {
-		name            string
-		jsonResponse    string
+		name             string
+		jsonResponse     string
 		expectedComments int
-		expectedSummary string
-		expectError     bool
+		expectedSummary  string
+		expectError      bool
 	}{
 		{
 			name: "valid JSON response with line numbers",
@@ -612,15 +612,15 @@ func TestParseJSONResponse(t *testing.T) {
 				"summary": "Overall code quality is good with minor improvements needed"
 			}`,
 			expectedComments: 2,
-			expectedSummary: "Overall code quality is good with minor improvements needed",
-			expectError: false,
+			expectedSummary:  "Overall code quality is good with minor improvements needed",
+			expectError:      false,
 		},
 		{
-			name: "JSON with markdown code blocks",
-			jsonResponse: "```json\n{\n  \"comments\": [\n    {\n      \"filename\": \"test.go\",\n      \"line_number\": 42,\n      \"comment\": \"Test comment\",\n      \"severity\": \"info\",\n      \"type\": \"suggestion\"\n    }\n  ],\n  \"summary\": \"Test summary\"\n}\n```",
+			name:             "JSON with markdown code blocks",
+			jsonResponse:     "```json\n{\n  \"comments\": [\n    {\n      \"filename\": \"test.go\",\n      \"line_number\": 42,\n      \"comment\": \"Test comment\",\n      \"severity\": \"info\",\n      \"type\": \"suggestion\"\n    }\n  ],\n  \"summary\": \"Test summary\"\n}\n```",
 			expectedComments: 1,
-			expectedSummary: "Test summary",
-			expectError: false,
+			expectedSummary:  "Test summary",
+			expectError:      false,
 		},
 		{
 			name: "invalid line numbers filtered out",
@@ -644,8 +644,8 @@ func TestParseJSONResponse(t *testing.T) {
 				"summary": "Test with invalid line numbers"
 			}`,
 			expectedComments: 1, // Only one valid comment
-			expectedSummary: "Test with invalid line numbers",
-			expectError: false,
+			expectedSummary:  "Test with invalid line numbers",
+			expectError:      false,
 		},
 		{
 			name: "all comments invalid",
@@ -669,8 +669,8 @@ func TestParseJSONResponse(t *testing.T) {
 				"summary": "All invalid comments"
 			}`,
 			expectedComments: 0,
-			expectedSummary: "",
-			expectError: true, // Should error when all comments are invalid
+			expectedSummary:  "",
+			expectError:      true, // Should error when all comments are invalid
 		},
 		{
 			name: "invalid JSON",
@@ -683,8 +683,8 @@ func TestParseJSONResponse(t *testing.T) {
 				]
 			}`, // Missing comma - invalid JSON
 			expectedComments: 0,
-			expectedSummary: "",
-			expectError: true,
+			expectedSummary:  "",
+			expectError:      true,
 		},
 	}
 
