@@ -92,9 +92,9 @@ func (m *mockDeletionAnalyzer) AnalyzeDeletions(request *analyzer.DeletionAnalys
 		SafeDeletions: []string{"UnusedFunction"},
 		Warnings: []analyzer.Warning{
 			{
-				Type:     "orphaned_references",
-				Message:  "Found 2 potential orphaned references",
-				Severity: "warning",
+				Type:       "orphaned_references",
+				Message:    "Found 2 potential orphaned references",
+				Severity:   "warning",
 				Suggestion: "Review the identified references and either remove them or provide alternative implementations",
 			},
 		},
@@ -464,7 +464,7 @@ func (m *integrationMockGitHubCommentClient) CreatePullRequestComments(ctx conte
 	for _, comment := range comments {
 		m.postedComments = append(m.postedComments, comment)
 	}
-	
+
 	return &github.CommentPostingResult{
 		SuccessfulComments: make([]github.PullRequestComment, len(comments)),
 		FailedComments:     []github.FailedComment{},

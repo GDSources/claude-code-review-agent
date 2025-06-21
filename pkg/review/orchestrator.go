@@ -19,13 +19,13 @@ type GitHubCommentClient interface {
 }
 
 type DefaultReviewOrchestrator struct {
-	workspaceManager   WorkspaceManager
-	diffFetcher        DiffFetcher
-	codeAnalyzer       CodeAnalyzer
-	codebaseFlattener  CodebaseFlattener
-	deletionAnalyzer   DeletionAnalyzer
-	llmClient          llm.CodeReviewer
-	githubClient       GitHubCommentClient
+	workspaceManager  WorkspaceManager
+	diffFetcher       DiffFetcher
+	codeAnalyzer      CodeAnalyzer
+	codebaseFlattener CodebaseFlattener
+	deletionAnalyzer  DeletionAnalyzer
+	llmClient         llm.CodeReviewer
+	githubClient      GitHubCommentClient
 }
 
 func NewDefaultReviewOrchestrator(workspaceManager WorkspaceManager, diffFetcher DiffFetcher, codeAnalyzer CodeAnalyzer) *DefaultReviewOrchestrator {
@@ -196,6 +196,14 @@ func (r *DefaultReviewOrchestrator) analyzeDiff(diffResult *github.DiffResult) (
 		return nil, fmt.Errorf("code analyzer not configured")
 	}
 
+	// Validate input parameters
+	if diffResult == nil {
+		return nil, fmt.Errorf("diff result cannot be nil")
+	}
+	if diffResult.RawDiff == "" {
+		return nil, fmt.Errorf("raw diff cannot be empty")
+	}
+
 	// Parse the raw diff
 	parsedDiff, err := r.codeAnalyzer.ParseDiff(diffResult.RawDiff)
 	if err != nil {
@@ -217,6 +225,20 @@ func (r *DefaultReviewOrchestrator) performDeletionAnalysis(ctx context.Context,
 		return fmt.Errorf("deletion analysis components not configured")
 	}
 
+	// Validate input parameters
+	if reviewData == nil {
+		return fmt.Errorf("review data cannot be nil")
+	}
+	if reviewData.DiffResult == nil {
+		return fmt.Errorf("diff result cannot be nil")
+	}
+	if reviewData.Workspace == nil {
+		return fmt.Errorf("workspace cannot be nil")
+	}
+	if reviewData.Workspace.Path == "" {
+		return fmt.Errorf("workspace path cannot be empty")
+	}
+
 	// Parse the diff to extract deleted content
 	parsedDiff, err := r.codeAnalyzer.ParseDiff(reviewData.DiffResult.RawDiff)
 	if err != nil {
@@ -225,14 +247,14 @@ func (r *DefaultReviewOrchestrator) performDeletionAnalysis(ctx context.Context,
 
 	// Extract deleted content from the diff
 	deletedContent := extractDeletedContent(parsedDiff)
-	
+
 	// Only proceed if there are deletions
 	if len(deletedContent) == 0 {
 		log.Printf("No deletions found in PR #%d, skipping deletion analysis", reviewData.Event.Number)
 		return nil
 	}
 
-	log.Printf("Found %d code deletions in PR #%d, performing safety analysis", 
+	log.Printf("Found %d code deletions in PR #%d, performing safety analysis",
 		len(deletedContent), reviewData.Event.Number)
 
 	// Flatten the codebase for AI analysis
@@ -241,7 +263,7 @@ func (r *DefaultReviewOrchestrator) performDeletionAnalysis(ctx context.Context,
 		return fmt.Errorf("failed to flatten codebase: %w", err)
 	}
 
-	log.Printf("Flattened codebase: %d files, %d lines for PR #%d", 
+	log.Printf("Flattened codebase: %d files, %d lines for PR #%d",
 		flattenedCodebase.TotalFiles, flattenedCodebase.TotalLines, reviewData.Event.Number)
 
 	// Create deletion analysis request
@@ -275,6 +297,17 @@ func (r *DefaultReviewOrchestrator) performDeletionAnalysis(ctx context.Context,
 func (r *DefaultReviewOrchestrator) performLLMReview(ctx context.Context, reviewData *ReviewData) (*llm.ReviewResponse, error) {
 	if r.llmClient == nil {
 		return nil, fmt.Errorf("LLM client not configured")
+	}
+
+	// Validate input parameters
+	if reviewData == nil {
+		return nil, fmt.Errorf("review data cannot be nil")
+	}
+	if reviewData.Event == nil {
+		return nil, fmt.Errorf("event data cannot be nil")
+	}
+	if reviewData.Event.PullRequest.ID == 0 {
+		return nil, fmt.Errorf("pull request data is invalid (missing ID)")
 	}
 
 	// Create LLM review request
@@ -387,13 +420,13 @@ func (r *DefaultReviewOrchestrator) postReviewComments(ctx context.Context, revi
 // extractDeletedContent extracts deleted code from a parsed diff
 func extractDeletedContent(parsedDiff *analyzer.ParsedDiff) []analyzer.DeletedCode {
 	var deletedContent []analyzer.DeletedCode
-	
+
 	for _, file := range parsedDiff.Files {
 		if file.Status == "deleted" {
 			// Entire file was deleted
 			var content strings.Builder
 			var startLine, endLine int
-			
+
 			for _, hunk := range file.Hunks {
 				for _, line := range hunk.Lines {
 					if line.Type == "removed" {
@@ -405,7 +438,7 @@ func extractDeletedContent(parsedDiff *analyzer.ParsedDiff) []analyzer.DeletedCo
 					}
 				}
 			}
-			
+
 			if content.Len() > 0 {
 				deletedContent = append(deletedContent, analyzer.DeletedCode{
 					File:       file.Filename,
@@ -422,7 +455,7 @@ func extractDeletedContent(parsedDiff *analyzer.ParsedDiff) []analyzer.DeletedCo
 				var content strings.Builder
 				var startLine, endLine int
 				var hasRemovedContent bool
-				
+
 				for _, line := range hunk.Lines {
 					if line.Type == "removed" {
 						if startLine == 0 {
@@ -433,7 +466,7 @@ func extractDeletedContent(parsedDiff *analyzer.ParsedDiff) []analyzer.DeletedCo
 						hasRemovedContent = true
 					}
 				}
-				
+
 				if hasRemovedContent {
 					deletedContent = append(deletedContent, analyzer.DeletedCode{
 						File:       file.Filename,
@@ -447,6 +480,6 @@ func extractDeletedContent(parsedDiff *analyzer.ParsedDiff) []analyzer.DeletedCo
 			}
 		}
 	}
-	
+
 	return deletedContent
 }

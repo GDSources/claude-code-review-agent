@@ -64,10 +64,10 @@ type CodebaseFlattener interface {
 
 // ReviewData contains all information needed for LLM analysis
 type ReviewData struct {
-	Event              *PullRequestEvent               `json:"event"`
-	Workspace          *Workspace                      `json:"workspace"`
-	DiffResult         *github.DiffResult              `json:"diff_result"`
-	ContextualDiff     *analyzer.ContextualDiff        `json:"contextual_diff"`
-	FlattenedCodebase  *analyzer.FlattenedCodebase     `json:"flattened_codebase,omitempty"`
-	DeletionAnalysis   *analyzer.DeletionAnalysisResult `json:"deletion_analysis,omitempty"`
+	Event             *PullRequestEvent                `json:"event"`
+	Workspace         *Workspace                       `json:"workspace"`
+	DiffResult        *github.DiffResult               `json:"diff_result"`
+	ContextualDiff    *analyzer.ContextualDiff         `json:"contextual_diff"`
+	FlattenedCodebase *analyzer.FlattenedCodebase      `json:"flattened_codebase,omitempty"`
+	DeletionAnalysis  *analyzer.DeletionAnalysisResult `json:"deletion_analysis,omitempty"`
 }

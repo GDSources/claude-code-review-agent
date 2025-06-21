@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestCompareHeuristicVsClaudeAnalysis demonstrates the difference between 
+// TestCompareHeuristicVsClaudeAnalysis demonstrates the difference between
 // heuristic analysis and Claude AI analysis for deletion safety
 func TestCompareHeuristicVsClaudeAnalysis(t *testing.T) {
 	// Create test data
@@ -96,7 +96,7 @@ func unusedFunction() {
 		}
 
 		// Create Claude client
-		config := ClaudeDeletionConfig{
+		config := ClaudeAnalyzerConfig{
 			APIKey:    apiKey,
 			Model:     DefaultDeletionModel,
 			MaxTokens: 4000, // Smaller for testing
@@ -275,7 +275,7 @@ func validateLegacyFormat(user *User) bool {
 	}
 
 	// Create Claude client
-	config := ClaudeDeletionConfig{
+	config := ClaudeAnalyzerConfig{
 		APIKey:    apiKey,
 		Model:     DefaultDeletionModel,
 		MaxTokens: 6000, // Larger for complex analysis
@@ -289,7 +289,7 @@ func validateLegacyFormat(user *User) bool {
 	analyzer := NewDeletionAnalyzerWithLLM(claudeClient)
 
 	t.Log("🏗️  Analyzing real-world microservices migration scenario...")
-	
+
 	result, err := analyzer.AnalyzeDeletions(request)
 	if err != nil {
 		t.Fatalf("Real-world analysis failed: %v", err)
@@ -315,9 +315,9 @@ func validateLegacyFormat(user *User) bool {
 		for _, expected := range expectedRefs {
 			found := false
 			for _, ref := range result.OrphanedReferences {
-				if ref.DeletedEntity == expected || 
-				   contains(ref.DeletedEntity, expected) ||
-				   contains(ref.Context, expected) {
+				if ref.DeletedEntity == expected ||
+					contains(ref.DeletedEntity, expected) ||
+					contains(ref.Context, expected) {
 					found = true
 					break
 				}
@@ -343,12 +343,12 @@ func validateLegacyFormat(user *User) bool {
 
 // Helper function for string containment check
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (s == substr || 
-		    (len(s) > len(substr) && 
-		     (s[:len(substr)] == substr || 
-		      s[len(s)-len(substr):] == substr ||
-		      containsSubstring(s, substr))))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			(len(s) > len(substr) &&
+				(s[:len(substr)] == substr ||
+					s[len(s)-len(substr):] == substr ||
+					containsSubstring(s, substr))))
 }
 
 func containsSubstring(s, substr string) bool {

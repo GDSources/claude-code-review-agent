@@ -17,7 +17,7 @@ func main() {
 	}
 
 	// Create Claude client for deletion analysis
-	claudeConfig := analyzer.ClaudeDeletionConfig{
+	claudeConfig := analyzer.ClaudeAnalyzerConfig{
 		APIKey:      apiKey,
 		Model:       analyzer.DefaultDeletionModel,
 		MaxTokens:   analyzer.DefaultDeletionMaxTokens,
@@ -30,7 +30,7 @@ func main() {
 	}
 
 	// Create deletion analyzer with Claude LLM integration
-	analyzer := analyzer.NewDeletionAnalyzerWithLLM(claudeClient)
+	deletionAnalyzer := analyzer.NewDeletionAnalyzerWithLLM(claudeClient)
 
 	// Example: Analyze a code deletion scenario
 	codebase := &analyzer.FlattenedCodebase{
@@ -166,7 +166,7 @@ const defaultCriteria = ScoringCriteria{
 
 	// Run AI-powered deletion analysis
 	ctx := context.Background()
-	result, err := analyzer.AnalyzeDeletionsWithContext(ctx, request)
+	result, err := deletionAnalyzer.AnalyzeDeletionsWithContext(ctx, request)
 	if err != nil {
 		log.Fatalf("Deletion analysis failed: %v", err)
 	}

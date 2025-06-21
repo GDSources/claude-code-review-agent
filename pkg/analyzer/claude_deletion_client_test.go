@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/your-org/review-agent/pkg/llm/claude"
 )
 
 func TestClaudeDeletionClient_Integration(t *testing.T) {
@@ -15,7 +17,7 @@ func TestClaudeDeletionClient_Integration(t *testing.T) {
 	}
 
 	// Create Claude client
-	config := ClaudeDeletionConfig{
+	config := ClaudeAnalyzerConfig{
 		APIKey:      apiKey,
 		Model:       DefaultDeletionModel,
 		MaxTokens:   DefaultDeletionMaxTokens,
@@ -153,7 +155,7 @@ type DeletedStruct struct {
 	t.Logf("  Summary: %s", result.Summary)
 
 	for i, ref := range result.OrphanedReferences {
-		t.Logf("  Reference %d: %s in %s (lines %v) - %s", 
+		t.Logf("  Reference %d: %s in %s (lines %v) - %s",
 			i+1, ref.DeletedEntity, ref.ReferencingFile, ref.ReferencingLines, ref.Severity)
 	}
 }
@@ -166,7 +168,7 @@ func TestClaudeDeletionClient_AnalyzeDeletionsWithLLM(t *testing.T) {
 	}
 
 	// Create Claude client
-	config := ClaudeDeletionConfig{
+	config := ClaudeAnalyzerConfig{
 		APIKey:    apiKey,
 		Model:     DefaultDeletionModel,
 		MaxTokens: 4000, // Smaller for faster testing
@@ -267,7 +269,7 @@ const DELETED_CONSTANT = "gone";`,
 
 func TestClaudeDeletionClient_Configuration(t *testing.T) {
 	// Test valid configuration
-	config := ClaudeDeletionConfig{
+	config := ClaudeAnalyzerConfig{
 		APIKey:      "test-key",
 		Model:       "claude-sonnet-4-20250514",
 		MaxTokens:   4000,
@@ -286,7 +288,7 @@ func TestClaudeDeletionClient_Configuration(t *testing.T) {
 	}
 
 	// Test missing API key
-	invalidConfig := ClaudeDeletionConfig{
+	invalidConfig := ClaudeAnalyzerConfig{
 		Model:     "claude-sonnet-4-20250514",
 		MaxTokens: 4000,
 	}
@@ -297,7 +299,7 @@ func TestClaudeDeletionClient_Configuration(t *testing.T) {
 	}
 
 	// Test invalid temperature
-	invalidConfig = ClaudeDeletionConfig{
+	invalidConfig = ClaudeAnalyzerConfig{
 		APIKey:      "test-key",
 		Temperature: 3.0, // Invalid: > 2.0
 	}
@@ -310,7 +312,7 @@ func TestClaudeDeletionClient_Configuration(t *testing.T) {
 
 func TestClaudeDeletionClient_DefaultConfiguration(t *testing.T) {
 	// Test that defaults are properly applied
-	config := ClaudeDeletionConfig{
+	config := ClaudeAnalyzerConfig{
 		APIKey: "test-key",
 		// All other fields should get defaults
 	}
@@ -368,9 +370,9 @@ func TestMaskAPIKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := maskAPIKey(tt.apiKey)
+			result := claude.MaskAPIKey(tt.apiKey)
 			if result != tt.expected {
-				t.Errorf("maskAPIKey(%q) = %q, want %q", tt.apiKey, result, tt.expected)
+				t.Errorf("claude.MaskAPIKey(%q) = %q, want %q", tt.apiKey, result, tt.expected)
 			}
 		})
 	}
@@ -386,12 +388,12 @@ func TestClaudeDeletionClient_String(t *testing.T) {
 	}
 
 	str := client.String()
-	
+
 	// Check that the string representation contains masked API key
 	if !strings.Contains(str, "sk-a...6789") {
 		t.Errorf("String() should mask the API key, got: %s", str)
 	}
-	
+
 	// Ensure the actual API key is not exposed
 	if strings.Contains(str, "verysecretkey") {
 		t.Errorf("String() exposed the API key: %s", str)

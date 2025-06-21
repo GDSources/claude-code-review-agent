@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/your-org/review-agent/pkg/llm/claude"
 )
 
 // ClaudeDeletionClient implements LLMClient for deletion analysis using Claude
@@ -21,8 +23,8 @@ type ClaudeDeletionClient struct {
 	httpClient  *http.Client
 }
 
-// ClaudeDeletionConfig contains Claude-specific configuration for deletion analysis
-type ClaudeDeletionConfig struct {
+// ClaudeAnalyzerConfig contains Claude-specific configuration for deletion analysis
+type ClaudeAnalyzerConfig struct {
 	APIKey      string  `json:"api_key"`
 	Model       string  `json:"model"`
 	MaxTokens   int     `json:"max_tokens"`
@@ -37,53 +39,20 @@ const (
 	DefaultDeletionMaxTokens   = 8000 // Higher limit for deletion analysis
 	DefaultDeletionTemperature = 0.1  // Low temperature for consistent analysis
 	DefaultDeletionBaseURL     = "https://api.anthropic.com"
-	DefaultDeletionTimeout     = 180  // 3 minutes for complex analysis
+	DefaultDeletionTimeout     = 180 // 3 minutes for complex analysis
 )
 
-// Claude API structures for deletion analysis
-type claudeDeletionRequest struct {
-	Model       string                    `json:"model"`
-	MaxTokens   int                       `json:"max_tokens"`
-	Messages    []claudeDeletionMessage   `json:"messages"`
-	Temperature float64                   `json:"temperature,omitempty"`
-	System      string                    `json:"system,omitempty"`
-}
-
-type claudeDeletionMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type claudeDeletionResponse struct {
-	Content []claudeDeletionContent `json:"content"`
-	Model   string                  `json:"model"`
-	Usage   claudeDeletionUsage     `json:"usage"`
-	ID      string                  `json:"id"`
-	Type    string                  `json:"type"`
-}
-
-type claudeDeletionContent struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-}
-
-type claudeDeletionUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
-}
-
-type claudeDeletionError struct {
-	Type    string      `json:"type"`
-	Message string      `json:"message"`
-	Details interface{} `json:"details,omitempty"`
-}
-
-type claudeDeletionErrorResponse struct {
-	Error claudeDeletionError `json:"error"`
-}
+// Claude API request/response type aliases for deletion analysis
+type claudeRequest = claude.BaseRequest
+type claudeMessage = claude.Message
+type claudeResponse = claude.BaseResponse
+type claudeContent = claude.Content
+type claudeUsage = claude.Usage
+type claudeError = claude.Error
+type claudeErrorResponse = claude.ErrorResponse
 
 // NewClaudeDeletionClient creates a new Claude client for deletion analysis
-func NewClaudeDeletionClient(config ClaudeDeletionConfig) (*ClaudeDeletionClient, error) {
+func NewClaudeDeletionClient(config ClaudeAnalyzerConfig) (*ClaudeDeletionClient, error) {
 	// Set defaults
 	if config.Model == "" {
 		config.Model = DefaultDeletionModel
@@ -126,32 +95,38 @@ func NewClaudeDeletionClient(config ClaudeDeletionConfig) (*ClaudeDeletionClient
 	}, nil
 }
 
-// maskAPIKey returns a masked version of the API key for logging
-func maskAPIKey(apiKey string) string {
-	if len(apiKey) <= 8 {
-		return "***"
-	}
-	return apiKey[:4] + "..." + apiKey[len(apiKey)-4:]
-}
-
 // String implements the Stringer interface to prevent accidental API key exposure
 func (c *ClaudeDeletionClient) String() string {
 	return fmt.Sprintf("ClaudeDeletionClient{model: %s, apiKey: %s, maxTokens: %d, temperature: %.2f, baseURL: %s}",
-		c.model, maskAPIKey(c.apiKey), c.maxTokens, c.temperature, c.baseURL)
+		c.model, claude.MaskAPIKey(c.apiKey), c.maxTokens, c.temperature, c.baseURL)
 }
 
 // AnalyzeDeletions implements the LLMClient interface for deletion analysis
 func (c *ClaudeDeletionClient) AnalyzeDeletions(ctx context.Context, aiContext *AIAnalysisContext) (*DeletionAnalysisResult, error) {
+	// Validate input parameters
+	if ctx == nil {
+		return nil, fmt.Errorf("context cannot be nil")
+	}
+	if aiContext == nil {
+		return nil, fmt.Errorf("AI analysis context cannot be nil")
+	}
+	if aiContext.CodebaseContext == "" {
+		return nil, fmt.Errorf("codebase context cannot be empty")
+	}
+	if aiContext.DeletionContext == "" {
+		return nil, fmt.Errorf("deletion context cannot be empty")
+	}
+
 	// Combine all context into the user prompt
 	userPrompt := c.buildUserPrompt(aiContext)
 
 	// Create Claude API request
-	claudeReq := claudeDeletionRequest{
+	claudeReq := claudeRequest{
 		Model:       c.model,
 		MaxTokens:   c.maxTokens,
 		Temperature: c.temperature,
 		System:      aiContext.SystemPrompt,
-		Messages: []claudeDeletionMessage{
+		Messages: []claudeMessage{
 			{
 				Role:    "user",
 				Content: userPrompt,
@@ -177,33 +152,33 @@ func (c *ClaudeDeletionClient) AnalyzeDeletions(ctx context.Context, aiContext *
 // buildUserPrompt combines the AI context into a single user prompt
 func (c *ClaudeDeletionClient) buildUserPrompt(aiContext *AIAnalysisContext) string {
 	var prompt strings.Builder
-	
+
 	prompt.WriteString(aiContext.UserPrompt)
 	prompt.WriteString("\n\n")
-	
+
 	prompt.WriteString(aiContext.CodebaseContext)
 	prompt.WriteString("\n\n")
-	
+
 	prompt.WriteString(aiContext.DeletionContext)
 	prompt.WriteString("\n\n")
-	
+
 	prompt.WriteString(aiContext.Instructions)
 	prompt.WriteString("\n\n")
-	
+
 	// Add expected format as example
 	expectedFormatJSON, _ := json.MarshalIndent(aiContext.ExpectedFormat, "", "  ")
 	prompt.WriteString("Expected JSON Response Format:\n")
 	prompt.WriteString("```json\n")
 	prompt.WriteString(string(expectedFormatJSON))
 	prompt.WriteString("\n```\n\n")
-	
+
 	prompt.WriteString("Please provide your analysis in the exact JSON format above.")
-	
+
 	return prompt.String()
 }
 
 // makeRequestWithRetry makes HTTP request to Claude API with exponential backoff retry
-func (c *ClaudeDeletionClient) makeRequestWithRetry(ctx context.Context, req claudeDeletionRequest) (*claudeDeletionResponse, error) {
+func (c *ClaudeDeletionClient) makeRequestWithRetry(ctx context.Context, req claudeRequest) (*claudeResponse, error) {
 	maxRetries := 3
 	baseDelay := time.Second
 
@@ -236,7 +211,7 @@ func (c *ClaudeDeletionClient) makeRequestWithRetry(ctx context.Context, req cla
 }
 
 // makeRequest makes a single HTTP request to Claude API
-func (c *ClaudeDeletionClient) makeRequest(ctx context.Context, req claudeDeletionRequest) (*claudeDeletionResponse, error) {
+func (c *ClaudeDeletionClient) makeRequest(ctx context.Context, req claudeRequest) (*claudeResponse, error) {
 	// Marshal request
 	reqBody, err := json.Marshal(req)
 	if err != nil {
@@ -275,7 +250,7 @@ func (c *ClaudeDeletionClient) makeRequest(ctx context.Context, req claudeDeleti
 	}
 
 	// Parse successful response
-	var claudeResp claudeDeletionResponse
+	var claudeResp claudeResponse
 	if err := json.Unmarshal(respBody, &claudeResp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -285,51 +260,17 @@ func (c *ClaudeDeletionClient) makeRequest(ctx context.Context, req claudeDeleti
 
 // handleHTTPError processes HTTP error responses
 func (c *ClaudeDeletionClient) handleHTTPError(statusCode int, body []byte) error {
-	var errResp claudeDeletionErrorResponse
-	if err := json.Unmarshal(body, &errResp); err != nil {
-		return fmt.Errorf("HTTP %d: %s", statusCode, string(body))
-	}
-
-	switch statusCode {
-	case 400:
-		return fmt.Errorf("bad request: %s", errResp.Error.Message)
-	case 401:
-		return fmt.Errorf("authentication failed (check API key): %s", errResp.Error.Message)
-	case 403:
-		return fmt.Errorf("forbidden (check API permissions): %s", errResp.Error.Message)
-	case 429:
-		return fmt.Errorf("rate limit exceeded: %s", errResp.Error.Message)
-	case 500, 502, 503:
-		return fmt.Errorf("server error: %s", errResp.Error.Message)
-	default:
-		return fmt.Errorf("HTTP %d: %s", statusCode, errResp.Error.Message)
-	}
+	return claude.HandleHTTPError(statusCode, body)
 }
 
 // shouldRetry determines if an error is retryable
 func (c *ClaudeDeletionClient) shouldRetry(err error) bool {
-	errStr := err.Error()
-	// Retry on rate limits and server errors
-	return strings.Contains(errStr, "rate limit") ||
-		strings.Contains(errStr, "server error") ||
-		strings.Contains(errStr, "timeout") ||
-		strings.Contains(errStr, "connection")
+	return claude.ShouldRetry(err)
 }
 
 // parseClaudeResponse extracts deletion analysis result from Claude's JSON response
-func (c *ClaudeDeletionClient) parseClaudeResponse(resp *claudeDeletionResponse) (*DeletionAnalysisResult, error) {
-	if len(resp.Content) == 0 {
-		return nil, fmt.Errorf("empty response content")
-	}
-
-	var fullText strings.Builder
-	for _, content := range resp.Content {
-		if content.Type == "text" {
-			fullText.WriteString(content.Text)
-		}
-	}
-
-	responseText := fullText.String()
+func (c *ClaudeDeletionClient) parseClaudeResponse(resp *claudeResponse) (*DeletionAnalysisResult, error) {
+	responseText := claude.ExtractTextContent(resp)
 	if responseText == "" {
 		return nil, fmt.Errorf("no text content in response")
 	}
