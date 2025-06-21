@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/your-org/review-agent/pkg/analyzer"
-	"github.com/your-org/review-agent/pkg/llm/claude"
+	"github.com/GDSources/claude-code-review-agent/pkg/analyzer"
+	"github.com/GDSources/claude-code-review-agent/pkg/llm/claude"
 )
 
 // ClaudeClient implements the CodeReviewer interface for Anthropic's Claude

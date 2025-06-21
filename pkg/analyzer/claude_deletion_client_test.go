@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/your-org/review-agent/pkg/llm/claude"
+	"github.com/GDSources/claude-code-review-agent/pkg/llm/claude"
 )
 
 func TestClaudeDeletionClient_Integration(t *testing.T) {

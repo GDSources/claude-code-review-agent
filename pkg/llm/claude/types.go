@@ -61,3 +61,21 @@ type HTTPStatusError struct {
 func (e HTTPStatusError) Error() string {
 	return e.Message
 }
+
+// ResourceLimits defines limits for memory and processing to prevent resource exhaustion
+type ResourceLimits struct {
+	MaxCodebaseSize   int64 `json:"max_codebase_size"`   // Maximum codebase size in bytes
+	MaxFileCount      int   `json:"max_file_count"`      // Maximum number of files to process
+	MaxPromptLength   int   `json:"max_prompt_length"`   // Maximum prompt length in characters
+	MaxResponseLength int   `json:"max_response_length"` // Maximum response length in characters
+	MaxContextLines   int   `json:"max_context_lines"`   // Maximum context lines per file
+}
+
+// DefaultResourceLimits provides sensible defaults for resource limits
+var DefaultResourceLimits = ResourceLimits{
+	MaxCodebaseSize:   50 * 1024 * 1024, // 50MB
+	MaxFileCount:      1000,              // 1000 files max
+	MaxPromptLength:   500000,            // 500KB prompt max
+	MaxResponseLength: 100000,            // 100KB response max
+	MaxContextLines:   50,                // 50 lines context per file
+}

@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/your-org/review-agent/pkg/analyzer"
+	"github.com/GDSources/claude-code-review-agent/pkg/analyzer"
 )
 
 func main() {

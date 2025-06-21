@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/your-org/review-agent/pkg/llm/claude"
+	"github.com/GDSources/claude-code-review-agent/pkg/llm/claude"
 )
 
 // ClaudeDeletionClient implements LLMClient for deletion analysis using Claude
@@ -25,12 +25,13 @@ type ClaudeDeletionClient struct {
 
 // ClaudeAnalyzerConfig contains Claude-specific configuration for deletion analysis
 type ClaudeAnalyzerConfig struct {
-	APIKey      string  `json:"api_key"`
-	Model       string  `json:"model"`
-	MaxTokens   int     `json:"max_tokens"`
-	Temperature float64 `json:"temperature"`
-	BaseURL     string  `json:"base_url"`
-	Timeout     int     `json:"timeout_seconds"`
+	APIKey      string                `json:"api_key"`
+	Model       string                `json:"model"`
+	MaxTokens   int                   `json:"max_tokens"`
+	Temperature float64               `json:"temperature"`
+	BaseURL     string                `json:"base_url"`
+	Timeout     int                   `json:"timeout_seconds"`
+	Limits      claude.ResourceLimits `json:"resource_limits"`
 }
 
 // Default configurations for deletion analysis
@@ -69,16 +70,34 @@ func NewClaudeDeletionClient(config ClaudeAnalyzerConfig) (*ClaudeDeletionClient
 	if config.Timeout == 0 {
 		config.Timeout = DefaultDeletionTimeout
 	}
+	// Set default resource limits if not provided
+	if config.Limits.MaxCodebaseSize == 0 {
+		config.Limits = claude.DefaultResourceLimits
+	}
 
 	// Validate configuration
-	if config.APIKey == "" {
-		return nil, fmt.Errorf("API key is required")
+	if err := claude.ValidateAPIKey(config.APIKey); err != nil {
+		return nil, fmt.Errorf("invalid API key: %w", err)
 	}
 	if config.MaxTokens <= 0 {
 		return nil, fmt.Errorf("max tokens must be positive")
 	}
 	if config.Temperature < 0 || config.Temperature > 2 {
 		return nil, fmt.Errorf("temperature must be between 0 and 2")
+	}
+	if config.Timeout < 10 || config.Timeout > 600 {
+		return nil, fmt.Errorf("timeout must be between 10 and 600 seconds")
+	}
+	if config.BaseURL == "" {
+		return nil, fmt.Errorf("base URL cannot be empty")
+	}
+	// Validate URL format
+	if !strings.HasPrefix(config.BaseURL, "http://") && !strings.HasPrefix(config.BaseURL, "https://") {
+		return nil, fmt.Errorf("base URL must start with http:// or https://")
+	}
+	// Validate resource limits
+	if config.Limits.MaxCodebaseSize <= 0 || config.Limits.MaxFileCount <= 0 {
+		return nil, fmt.Errorf("resource limits must be positive")
 	}
 
 	httpClient := &http.Client{
@@ -103,18 +122,24 @@ func (c *ClaudeDeletionClient) String() string {
 
 // AnalyzeDeletions implements the LLMClient interface for deletion analysis
 func (c *ClaudeDeletionClient) AnalyzeDeletions(ctx context.Context, aiContext *AIAnalysisContext) (*DeletionAnalysisResult, error) {
-	// Validate input parameters
+	// Validate input parameters with detailed error context
 	if ctx == nil {
-		return nil, fmt.Errorf("context cannot be nil")
+		return nil, fmt.Errorf("context cannot be nil - ensure proper context is provided")
 	}
 	if aiContext == nil {
-		return nil, fmt.Errorf("AI analysis context cannot be nil")
+		return nil, fmt.Errorf("AI analysis context cannot be nil - ensure analysis context is properly initialized")
 	}
 	if aiContext.CodebaseContext == "" {
-		return nil, fmt.Errorf("codebase context cannot be empty")
+		return nil, fmt.Errorf("codebase context cannot be empty - ensure codebase has been properly flattened")
 	}
 	if aiContext.DeletionContext == "" {
-		return nil, fmt.Errorf("deletion context cannot be empty")
+		return nil, fmt.Errorf("deletion context cannot be empty - ensure deleted content has been extracted")
+	}
+	
+	// Validate context sizes for memory safety
+	if len(aiContext.CodebaseContext) > 1000000 { // 1MB limit
+		return nil, fmt.Errorf("codebase context too large (%d bytes) - consider processing smaller chunks", 
+			len(aiContext.CodebaseContext))
 	}
 
 	// Combine all context into the user prompt
@@ -153,16 +178,22 @@ func (c *ClaudeDeletionClient) AnalyzeDeletions(ctx context.Context, aiContext *
 func (c *ClaudeDeletionClient) buildUserPrompt(aiContext *AIAnalysisContext) string {
 	var prompt strings.Builder
 
-	prompt.WriteString(aiContext.UserPrompt)
+	// Sanitize all input components
+	userPrompt := claude.SanitizeInput(aiContext.UserPrompt)
+	codebaseContext := claude.SanitizeInput(aiContext.CodebaseContext)
+	deletionContext := claude.SanitizeInput(aiContext.DeletionContext)
+	instructions := claude.SanitizeInput(aiContext.Instructions)
+
+	prompt.WriteString(userPrompt)
 	prompt.WriteString("\n\n")
 
-	prompt.WriteString(aiContext.CodebaseContext)
+	prompt.WriteString(codebaseContext)
 	prompt.WriteString("\n\n")
 
-	prompt.WriteString(aiContext.DeletionContext)
+	prompt.WriteString(deletionContext)
 	prompt.WriteString("\n\n")
 
-	prompt.WriteString(aiContext.Instructions)
+	prompt.WriteString(instructions)
 	prompt.WriteString("\n\n")
 
 	// Add expected format as example
@@ -174,7 +205,13 @@ func (c *ClaudeDeletionClient) buildUserPrompt(aiContext *AIAnalysisContext) str
 
 	prompt.WriteString("Please provide your analysis in the exact JSON format above.")
 
-	return prompt.String()
+	// Apply resource limits to the final prompt
+	finalPrompt := prompt.String()
+	if len(finalPrompt) > 500000 { // 500KB limit
+		finalPrompt = claude.TruncateWithLimits(finalPrompt, claude.DefaultResourceLimits)
+	}
+
+	return finalPrompt
 }
 
 // makeRequestWithRetry makes HTTP request to Claude API with exponential backoff retry
@@ -207,7 +244,7 @@ func (c *ClaudeDeletionClient) makeRequestWithRetry(ctx context.Context, req cla
 		}
 	}
 
-	return nil, fmt.Errorf("all retry attempts failed, last error: %w", lastErr)
+	return nil, fmt.Errorf("all %d retry attempts failed, last error: %w - check API key, network connectivity, and Claude service status", maxRetries+1, lastErr)
 }
 
 // makeRequest makes a single HTTP request to Claude API

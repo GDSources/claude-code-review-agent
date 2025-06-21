@@ -6,9 +6,9 @@ import (
 	"log"
 	"strings"
 
-	"github.com/your-org/review-agent/pkg/analyzer"
-	"github.com/your-org/review-agent/pkg/github"
-	"github.com/your-org/review-agent/pkg/llm"
+	"github.com/GDSources/claude-code-review-agent/pkg/analyzer"
+	"github.com/GDSources/claude-code-review-agent/pkg/github"
+	"github.com/GDSources/claude-code-review-agent/pkg/llm"
 )
 
 // GitHubCommentClient interface for posting comments (to avoid circular imports)
