@@ -571,12 +571,12 @@ func validateClaudeConfig(config ClaudeConfig) error {
 	if config.Temperature < 0 || config.Temperature > 2 {
 		return fmt.Errorf("temperature must be between 0 and 2")
 	}
-	
+
 	// Validate model is supported
 	if !isValidClaudeModel(config.Model) {
 		return fmt.Errorf("unsupported model '%s'. Available models: %v", config.Model, AvailableClaudeModels)
 	}
-	
+
 	return nil
 }
 

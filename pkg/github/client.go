@@ -85,8 +85,8 @@ type PullRequestComment struct {
 
 // CommentPostingResult represents the result of batch comment posting
 type CommentPostingResult struct {
-	SuccessfulComments []PullRequestComment  `json:"successful_comments"`
-	FailedComments     []FailedComment       `json:"failed_comments"`
+	SuccessfulComments []PullRequestComment `json:"successful_comments"`
+	FailedComments     []FailedComment      `json:"failed_comments"`
 }
 
 // FailedComment represents a comment that failed to post
@@ -410,7 +410,7 @@ func (c *Client) makeRequestWithBody(ctx context.Context, method, endpoint strin
 // CreatePullRequestComment creates a new comment on a pull request
 func (c *Client) CreatePullRequestComment(ctx context.Context, owner, repo string, prNumber int, comment CreatePullRequestCommentRequest) (*PullRequestComment, error) {
 	endpoint := fmt.Sprintf("/repos/%s/%s/pulls/%d/comments", owner, repo, prNumber)
-	
+
 	resp, err := c.makeRequestWithBody(ctx, "POST", endpoint, comment)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PR comment: %w", err)
@@ -450,7 +450,7 @@ func (c *Client) CreatePullRequestComments(ctx context.Context, owner, repo stri
 // GetPullRequestComments retrieves existing comments on a pull request
 func (c *Client) GetPullRequestComments(ctx context.Context, owner, repo string, prNumber int) ([]PullRequestComment, error) {
 	endpoint := fmt.Sprintf("/repos/%s/%s/pulls/%d/comments", owner, repo, prNumber)
-	
+
 	resp, err := c.makeRequest(ctx, "GET", endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PR comments: %w", err)

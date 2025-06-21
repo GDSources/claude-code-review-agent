@@ -118,14 +118,14 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) e
 	// Send reviewData to LLM for analysis if available
 	if reviewData != nil && r.llmClient != nil {
 		log.Printf("Sending PR #%d to LLM for analysis", event.Number)
-		
+
 		reviewResponse, err := r.performLLMReview(ctx, reviewData)
 		if err != nil {
 			log.Printf("Warning: LLM review failed for PR #%d: %v", event.Number, err)
 		} else {
-			log.Printf("LLM review completed for PR #%d: %d comments generated", 
+			log.Printf("LLM review completed for PR #%d: %d comments generated",
 				event.Number, len(reviewResponse.Comments))
-			
+
 			// Post generated comments back to GitHub PR
 			if r.githubClient != nil {
 				err := r.postReviewComments(ctx, reviewData, reviewResponse)
@@ -135,7 +135,7 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) e
 			} else {
 				log.Printf("GitHub client not configured, skipping comment posting for PR #%d", event.Number)
 			}
-			
+
 			r.logReviewResults(reviewResponse)
 		}
 	} else if reviewData != nil {
@@ -198,7 +198,7 @@ func (r *DefaultReviewOrchestrator) performLLMReview(ctx context.Context, review
 		DiffResult:     reviewData.DiffResult,
 		ContextualDiff: reviewData.ContextualDiff,
 		ReviewType:     llm.ReviewTypeGeneral, // Default to general review
-		Instructions:   "", // Could be customizable
+		Instructions:   "",                    // Could be customizable
 	}
 
 	// Perform the review
@@ -216,17 +216,17 @@ func (r *DefaultReviewOrchestrator) logReviewResults(response *llm.ReviewRespons
 		log.Printf("LLM Review Summary: %s", response.Summary)
 	}
 
-	log.Printf("Model: %s, Tokens Used: %d (input: %d, output: %d)", 
-		response.ModelUsed, 
+	log.Printf("Model: %s, Tokens Used: %d (input: %d, output: %d)",
+		response.ModelUsed,
 		response.TokensUsed.TotalTokens,
 		response.TokensUsed.InputTokens,
 		response.TokensUsed.OutputTokens)
 
 	for i, comment := range response.Comments {
-		log.Printf("Comment %d: %s:%d - %s (%s)", 
-			i+1, 
-			comment.Filename, 
-			comment.LineNumber, 
+		log.Printf("Comment %d: %s:%d - %s (%s)",
+			i+1,
+			comment.Filename,
+			comment.LineNumber,
 			comment.Comment,
 			comment.Severity)
 	}
@@ -250,12 +250,12 @@ func (r *DefaultReviewOrchestrator) postReviewComments(ctx context.Context, revi
 			LineNumber: llmComment.LineNumber,
 			Comment:    llmComment.Comment,
 		}
-		
+
 		githubComment, shouldPost := github.ConvertReviewCommentToGitHub(commentInput, commitID)
 		if shouldPost {
 			githubComments = append(githubComments, githubComment)
 		} else {
-			log.Printf("Skipping comment for %s (line %d): not suitable for line-specific posting", 
+			log.Printf("Skipping comment for %s (line %d): not suitable for line-specific posting",
 				llmComment.Filename, llmComment.LineNumber)
 		}
 	}
@@ -278,14 +278,14 @@ func (r *DefaultReviewOrchestrator) postReviewComments(ctx context.Context, revi
 	}
 
 	// Log results
-	log.Printf("Posted %d comments successfully, %d failed for PR #%d", 
-		len(result.SuccessfulComments), 
+	log.Printf("Posted %d comments successfully, %d failed for PR #%d",
+		len(result.SuccessfulComments),
 		len(result.FailedComments),
 		reviewData.Event.Number)
 
 	// Log any failed comments
 	for _, failed := range result.FailedComments {
-		log.Printf("Failed to post comment for %s:%d - %s", 
+		log.Printf("Failed to post comment for %s:%d - %s",
 			failed.Request.Path, failed.Request.Line, failed.Error)
 	}
 

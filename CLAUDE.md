@@ -71,6 +71,84 @@ golangci-lint run
 go vet ./...
 ```
 
+## Git Workflow
+
+### Feature Development Process
+
+**IMPORTANT**: Always use feature branches and pull requests for development work.
+
+#### 1. Start New Feature
+```bash
+# Create and switch to feature branch
+git checkout -b feature/your-feature-name
+
+# Alternative: bug fixes
+git checkout -b fix/issue-description
+
+# Alternative: documentation updates  
+git checkout -b docs/update-description
+```
+
+#### 2. Development Cycle
+```bash
+# Make your changes and commit regularly
+git add .
+git commit -m "feat: implement new feature
+
+- Add specific functionality
+- Update tests and documentation
+- Ensure all tests pass"
+
+# Run tests before committing
+go test ./...
+go fmt ./...
+go vet ./...
+```
+
+#### 3. Create Pull Request
+```bash
+# Push feature branch to remote
+git push -u origin feature/your-feature-name
+
+# Create pull request via GitHub CLI (if available)
+gh pr create --title "Add your feature" --body "Description of changes"
+
+# Or create PR manually via GitHub web interface
+```
+
+#### 4. Code Review Process
+- Ensure all tests pass
+- Request review from team members
+- Address feedback and update PR
+- Merge only after approval
+
+#### 5. Cleanup
+```bash
+# After PR is merged, cleanup local branches
+git checkout main
+git pull origin main
+git branch -d feature/your-feature-name
+```
+
+### Branch Naming Conventions
+- `feature/feature-name` - New features
+- `fix/bug-description` - Bug fixes  
+- `docs/update-type` - Documentation updates
+- `refactor/component-name` - Code refactoring
+- `test/test-description` - Test improvements
+
+### Commit Message Format
+Follow conventional commits format:
+```
+type(scope): brief description
+
+Detailed explanation if needed
+- Bullet points for multiple changes
+- Reference issues: Fixes #123
+```
+
+Types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`
+
 ## Architecture Overview
 
 The application follows a modular, event-driven architecture with clear separation of concerns:

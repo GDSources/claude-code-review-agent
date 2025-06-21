@@ -368,7 +368,7 @@ func TestDefaultReviewOrchestrator_PostComments_Success(t *testing.T) {
 		},
 	}
 
-	// Create mock code analyzer  
+	// Create mock code analyzer
 	mockCA := &mockCodeAnalyzer{
 		parsedDiff: &analyzer.ParsedDiff{
 			TotalFiles: 2,
