@@ -9,15 +9,27 @@ import (
 )
 
 type mockGitHubCloner struct {
-	shouldFail  bool
-	error       error
-	clonedRepos []string
-	clonedPaths []string
+	shouldFail      bool
+	error           error
+	clonedRepos     []string
+	clonedPaths     []string
+	checkedOutPaths []string
+	checkedOutBranches []string
 }
 
 func (m *mockGitHubCloner) CloneRepository(ctx context.Context, owner, repo, destination string) error {
 	m.clonedRepos = append(m.clonedRepos, fmt.Sprintf("%s/%s", owner, repo))
 	m.clonedPaths = append(m.clonedPaths, destination)
+
+	if m.shouldFail {
+		return m.error
+	}
+	return nil
+}
+
+func (m *mockGitHubCloner) CheckoutBranch(ctx context.Context, repoPath, branch string) error {
+	m.checkedOutPaths = append(m.checkedOutPaths, repoPath)
+	m.checkedOutBranches = append(m.checkedOutBranches, branch)
 
 	if m.shouldFail {
 		return m.error

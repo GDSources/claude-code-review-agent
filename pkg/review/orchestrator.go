@@ -33,6 +33,7 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) e
 	}()
 
 	log.Printf("Successfully cloned repository %s to %s", event.Repository.FullName, workspace.Path)
+	log.Printf("Checked out branch %s for PR #%d", event.PullRequest.Head.Ref, event.Number)
 
 	// TODO: Add code analysis, LLM review, and comment posting here
 	log.Printf("Review completed for PR #%d", event.Number)

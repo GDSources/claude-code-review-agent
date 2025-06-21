@@ -1,0 +1,59 @@
+services:
+  review-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - PORT=8080
+    volumes:
+      # Mount workspace directory for production
+      - review-workspaces:/tmp/workspaces
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "./review-agent", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Development service with hot reload
+  review-agent-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${DEV_PORT:-8081}:8080"
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - PORT=8080
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      - /app/bin
+      - review-workspaces:/tmp/workspaces
+    working_dir: /app
+    command: ["make", "dev-watch"]
+    profiles:
+      - dev
+
+  # Webhook testing service
+  webhook-test:
+    image: curlimages/curl:latest
+    depends_on:
+      - review-agent
+    volumes:
+      - ./scripts:/scripts:ro
+    profiles:
+      - test
+    command: ["sleep", "infinity"]
+
+volumes:
+  review-workspaces:

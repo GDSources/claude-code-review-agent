@@ -8,6 +8,7 @@ import (
 
 type GitHubCloner interface {
 	CloneRepository(ctx context.Context, owner, repo, destination string) error
+	CheckoutBranch(ctx context.Context, repoPath, branch string) error
 }
 
 type FileSystemManager interface {

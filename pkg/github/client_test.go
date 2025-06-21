@@ -146,13 +146,50 @@ func TestMakeRequestError(t *testing.T) {
 type mockCommandExecutor struct {
 	commands []string
 	args     [][]string
+	dirs     []string
 	error    error
+	outputs  map[string]string // Map of command patterns to outputs
 }
 
 func (m *mockCommandExecutor) Execute(command string, args ...string) error {
 	m.commands = append(m.commands, command)
 	m.args = append(m.args, args)
+	m.dirs = append(m.dirs, "") // No directory specified for Execute
 	return m.error
+}
+
+func (m *mockCommandExecutor) ExecuteInDir(dir, command string, args ...string) error {
+	m.commands = append(m.commands, command)
+	m.args = append(m.args, args)
+	m.dirs = append(m.dirs, dir)
+	return m.error
+}
+
+func (m *mockCommandExecutor) ExecuteInDirWithOutput(dir, command string, args ...string) ([]byte, error) {
+	m.commands = append(m.commands, command)
+	m.args = append(m.args, args)
+	m.dirs = append(m.dirs, dir)
+	
+	if m.error != nil {
+		return nil, m.error
+	}
+	
+	// Build command key for lookup
+	cmdKey := command
+	for _, arg := range args {
+		cmdKey += " " + arg
+	}
+	
+	if output, exists := m.outputs[cmdKey]; exists {
+		return []byte(output), nil
+	}
+	
+	// Default output for git remote get-url origin
+	if command == "git" && len(args) >= 3 && args[0] == "remote" && args[1] == "get-url" && args[2] == "origin" {
+		return []byte("https://github.com/testowner/testrepo.git\n"), nil
+	}
+	
+	return []byte(""), nil
 }
 
 func TestCloneRepository(t *testing.T) {
@@ -251,5 +288,160 @@ func TestCloneRepositoryDirectoryCreation(t *testing.T) {
 	parentDir := filepath.Dir(destination)
 	if _, err := os.Stat(parentDir); os.IsNotExist(err) {
 		t.Error("expected parent directory to be created")
+	}
+}
+
+func TestCheckoutBranch(t *testing.T) {
+	tests := []struct {
+		name          string
+		repoPath      string
+		branch        string
+		mockError     error
+		expectedError bool
+		expectedCmds  []string
+		expectedDirs  []string
+		setupError    bool  // Error during authentication setup
+	}{
+		{
+			name:         "successful checkout existing branch",
+			repoPath:     "/tmp/test-repo",
+			branch:       "feature-branch",
+			mockError:    nil,
+			expectedCmds: []string{"git", "git", "git", "git"}, // get-url, set-url, fetch, checkout
+			expectedDirs: []string{"/tmp/test-repo", "/tmp/test-repo", "/tmp/test-repo", "/tmp/test-repo"},
+		},
+		{
+			name:          "authentication setup fails",
+			repoPath:      "/tmp/test-repo", 
+			branch:        "feature-branch",
+			mockError:     fmt.Errorf("auth failed"),
+			expectedError: true,
+			setupError:    true,
+			expectedCmds:  []string{"git"}, // Only get-url command before failure
+			expectedDirs:  []string{"/tmp/test-repo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := &mockCommandExecutor{error: tt.mockError}
+			client := NewClient("test-token")
+			client.cmdExecutor = mockExec
+
+			err := client.CheckoutBranch(context.Background(), tt.repoPath, tt.branch)
+
+			if tt.expectedError && err == nil {
+				t.Error("expected error but got none")
+			}
+			if !tt.expectedError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if len(mockExec.commands) != len(tt.expectedCmds) {
+				t.Errorf("expected %d commands, got %d", len(tt.expectedCmds), len(mockExec.commands))
+			}
+
+			for i, expectedCmd := range tt.expectedCmds {
+				if i >= len(mockExec.commands) {
+					t.Errorf("missing command %d: expected %s", i, expectedCmd)
+					continue
+				}
+				if mockExec.commands[i] != expectedCmd {
+					t.Errorf("command %d: expected %s, got %s", i, expectedCmd, mockExec.commands[i])
+				}
+			}
+
+			for i, expectedDir := range tt.expectedDirs {
+				if i >= len(mockExec.dirs) {
+					t.Errorf("missing directory %d: expected %s", i, expectedDir)
+					continue
+				}
+				if mockExec.dirs[i] != expectedDir {
+					t.Errorf("directory %d: expected %s, got %s", i, expectedDir, mockExec.dirs[i])
+				}
+			}
+		})
+	}
+}
+
+func TestParseGitHubURL(t *testing.T) {
+	client := NewClient("test-token")
+	
+	tests := []struct {
+		name          string
+		url           string
+		expectedOwner string
+		expectedRepo  string
+		expectedError bool
+	}{
+		{
+			name:          "HTTPS URL",
+			url:           "https://github.com/owner/repo.git",
+			expectedOwner: "owner",
+			expectedRepo:  "repo",
+			expectedError: false,
+		},
+		{
+			name:          "HTTPS URL with auth token",
+			url:           "https://x-access-token:token@github.com/owner/repo.git",
+			expectedOwner: "owner",
+			expectedRepo:  "repo",
+			expectedError: false,
+		},
+		{
+			name:          "SSH URL",
+			url:           "git@github.com:owner/repo.git",
+			expectedOwner: "owner",
+			expectedRepo:  "repo",
+			expectedError: false,
+		},
+		{
+			name:          "URL without .git suffix",
+			url:           "https://github.com/owner/repo",
+			expectedOwner: "owner",
+			expectedRepo:  "repo",
+			expectedError: false,
+		},
+		{
+			name:          "URL with whitespace",
+			url:           "  https://github.com/owner/repo.git\n",
+			expectedOwner: "owner",
+			expectedRepo:  "repo",
+			expectedError: false,
+		},
+		{
+			name:          "invalid URL format",
+			url:           "invalid-url",
+			expectedOwner: "",
+			expectedRepo:  "",
+			expectedError: true,
+		},
+		{
+			name:          "incomplete GitHub URL",
+			url:           "https://github.com/owner",
+			expectedOwner: "",
+			expectedRepo:  "",
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			owner, repo, err := client.parseGitHubURL(tt.url)
+
+			if tt.expectedError && err == nil {
+				t.Error("expected error but got none")
+			}
+			if !tt.expectedError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if owner != tt.expectedOwner {
+				t.Errorf("expected owner %s, got %s", tt.expectedOwner, owner)
+			}
+			if repo != tt.expectedRepo {
+				t.Errorf("expected repo %s, got %s", tt.expectedRepo, repo)
+			}
+		})
 	}
 }

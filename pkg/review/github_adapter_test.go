@@ -7,9 +7,10 @@ import (
 )
 
 type mockGitHubClient struct {
-	shouldFail bool
-	error      error
-	cloneCalls []cloneCall
+	shouldFail    bool
+	error         error
+	cloneCalls    []cloneCall
+	checkoutCalls []checkoutCall
 }
 
 type cloneCall struct {
@@ -18,11 +19,28 @@ type cloneCall struct {
 	destination string
 }
 
+type checkoutCall struct {
+	repoPath string
+	branch   string
+}
+
 func (m *mockGitHubClient) CloneRepository(ctx context.Context, owner, repo, destination string) error {
 	m.cloneCalls = append(m.cloneCalls, cloneCall{
 		owner:       owner,
 		repo:        repo,
 		destination: destination,
+	})
+
+	if m.shouldFail {
+		return m.error
+	}
+	return nil
+}
+
+func (m *mockGitHubClient) CheckoutBranch(ctx context.Context, repoPath, branch string) error {
+	m.checkoutCalls = append(m.checkoutCalls, checkoutCall{
+		repoPath: repoPath,
+		branch:   branch,
 	})
 
 	if m.shouldFail {
@@ -95,6 +113,70 @@ func TestGitHubClonerAdapter_CloneRepository(t *testing.T) {
 				}
 				if call.destination != tt.destination {
 					t.Errorf("expected destination '%s', got '%s'", tt.destination, call.destination)
+				}
+			}
+		})
+	}
+}
+
+func TestGitHubClonerAdapter_CheckoutBranch(t *testing.T) {
+	tests := []struct {
+		name        string
+		repoPath    string
+		branch      string
+		clientFail  bool
+		clientError error
+		expectError bool
+	}{
+		{
+			name:        "successful checkout",
+			repoPath:    "/tmp/test-repo",
+			branch:      "feature-branch",
+			expectError: false,
+		},
+		{
+			name:        "client error propagates",
+			repoPath:    "/tmp/test-repo",
+			branch:      "feature-branch",
+			clientFail:  true,
+			clientError: fmt.Errorf("checkout failed"),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient := &mockGitHubClient{
+				shouldFail: tt.clientFail,
+				error:      tt.clientError,
+			}
+
+			// Create adapter with mock client
+			adapter := &GitHubClonerAdapter{client: mockClient}
+
+			err := adapter.CheckoutBranch(context.Background(), tt.repoPath, tt.branch)
+
+			// Check error expectations
+			if tt.expectError && err == nil {
+				t.Error("expected error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if tt.clientError != nil && err != tt.clientError {
+				t.Errorf("expected error %v, got %v", tt.clientError, err)
+			}
+
+			// Verify call was made to underlying client
+			if len(mockClient.checkoutCalls) != 1 {
+				t.Errorf("expected 1 checkout call, got %d", len(mockClient.checkoutCalls))
+			} else {
+				call := mockClient.checkoutCalls[0]
+				if call.repoPath != tt.repoPath {
+					t.Errorf("expected repoPath '%s', got '%s'", tt.repoPath, call.repoPath)
+				}
+				if call.branch != tt.branch {
+					t.Errorf("expected branch '%s', got '%s'", tt.branch, call.branch)
 				}
 			}
 		})

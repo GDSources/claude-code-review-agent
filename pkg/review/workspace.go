@@ -32,6 +32,13 @@ func (w *DefaultWorkspaceManager) CreateWorkspace(ctx context.Context, event *Pu
 			event.Repository.Owner.Login, event.Repository.Name, err)
 	}
 
+	// Checkout the PR branch
+	branchName := event.PullRequest.Head.Ref
+	if err := w.cloner.CheckoutBranch(ctx, repoPath, branchName); err != nil {
+		w.fs.RemoveAll(tempDir)
+		return nil, fmt.Errorf("failed to checkout branch %s: %w", branchName, err)
+	}
+
 	workspace := &Workspace{
 		Path:        repoPath,
 		Repository:  &event.Repository,

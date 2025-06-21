@@ -1,0 +1,38 @@
+# Development Dockerfile with hot reload support
+FROM golang:1.24-alpine
+
+# Install development tools
+RUN apk add --no-cache git ca-certificates make curl
+
+# Install air for hot reloading
+RUN go install github.com/air-verse/air@latest
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod ./
+COPY go.su[m] ./
+
+# Download dependencies
+RUN go mod download
+
+# Create non-root user for development
+RUN addgroup -g 1001 -S devgroup && \
+    adduser -u 1001 -S devuser -G devgroup
+
+# Create directories
+RUN mkdir -p /tmp/workspaces bin && \
+    chown -R devuser:devgroup /app /tmp/workspaces
+
+# Switch to non-root user
+USER devuser
+
+# Copy source code (this will be overridden by volume mount in development)
+COPY --chown=devuser:devgroup . .
+
+# Default command for development
+CMD ["air", "-c", ".air.toml"]
+
+# Expose port
+EXPOSE 8080

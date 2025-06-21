@@ -8,11 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 type CommandExecutor interface {
 	Execute(command string, args ...string) error
+	ExecuteInDir(dir, command string, args ...string) error
+	ExecuteInDirWithOutput(dir, command string, args ...string) ([]byte, error)
 }
 
 type defaultCommandExecutor struct{}
@@ -20,6 +23,18 @@ type defaultCommandExecutor struct{}
 func (d *defaultCommandExecutor) Execute(command string, args ...string) error {
 	cmd := exec.Command(command, args...)
 	return cmd.Run()
+}
+
+func (d *defaultCommandExecutor) ExecuteInDir(dir, command string, args ...string) error {
+	cmd := exec.Command(command, args...)
+	cmd.Dir = dir
+	return cmd.Run()
+}
+
+func (d *defaultCommandExecutor) ExecuteInDirWithOutput(dir, command string, args ...string) ([]byte, error) {
+	cmd := exec.Command(command, args...)
+	cmd.Dir = dir
+	return cmd.Output()
 }
 
 type Client struct {
@@ -121,4 +136,95 @@ func (c *Client) CloneRepository(ctx context.Context, owner, repo, destination s
 	}
 
 	return nil
+}
+
+func (c *Client) CheckoutBranch(ctx context.Context, repoPath, branch string) error {
+	// Configure git credentials for this repository to ensure authentication works
+	// We need to set the remote URL with the token for fetch operations to work
+	if err := c.configureGitAuth(repoPath); err != nil {
+		return fmt.Errorf("failed to configure git authentication: %w", err)
+	}
+
+	// First, fetch all branches to ensure we have the latest refs
+	if err := c.cmdExecutor.ExecuteInDir(repoPath, "git", "fetch", "origin"); err != nil {
+		return fmt.Errorf("failed to fetch from origin: %w", err)
+	}
+
+	// Try to checkout the branch (it might be a local branch or need to be created from remote)
+	if err := c.cmdExecutor.ExecuteInDir(repoPath, "git", "checkout", branch); err != nil {
+		// If checkout fails, try to create and checkout from origin
+		if err := c.cmdExecutor.ExecuteInDir(repoPath, "git", "checkout", "-b", branch, "origin/"+branch); err != nil {
+			return fmt.Errorf("failed to checkout branch %s: %w", branch, err)
+		}
+	}
+
+	return nil
+}
+
+// configureGitAuth configures git authentication for the repository
+// by updating the remote origin URL to include the access token
+func (c *Client) configureGitAuth(repoPath string) error {
+	// Get the current remote origin URL to extract owner and repo
+	output, err := c.cmdExecutor.ExecuteInDirWithOutput(repoPath, "git", "remote", "get-url", "origin")
+	if err != nil {
+		return fmt.Errorf("failed to get remote origin URL: %w", err)
+	}
+
+	currentURL := strings.TrimSpace(string(output))
+	
+	// Parse the GitHub repository from the URL
+	owner, repo, err := c.parseGitHubURL(currentURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse GitHub URL %s: %w", currentURL, err)
+	}
+
+	// Set the remote URL with authentication token
+	authenticatedURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s/%s.git", c.token, owner, repo)
+	if err := c.cmdExecutor.ExecuteInDir(repoPath, "git", "remote", "set-url", "origin", authenticatedURL); err != nil {
+		return fmt.Errorf("failed to set authenticated remote URL: %w", err)
+	}
+
+	return nil
+}
+
+// parseGitHubURL extracts owner and repo from various GitHub URL formats
+func (c *Client) parseGitHubURL(url string) (owner, repo string, err error) {
+	// Handle different URL formats:
+	// https://github.com/owner/repo.git
+	// https://x-access-token:token@github.com/owner/repo.git
+	// git@github.com:owner/repo.git
+	
+	// Clean up the URL
+	url = strings.TrimSpace(url)
+	url = strings.TrimSuffix(url, ".git")
+	
+	// Handle HTTPS URLs
+	if strings.Contains(url, "github.com/") {
+		// Find the path after github.com/
+		parts := strings.Split(url, "github.com/")
+		if len(parts) < 2 {
+			return "", "", fmt.Errorf("invalid GitHub URL format")
+		}
+		
+		path := parts[1]
+		pathParts := strings.Split(path, "/")
+		if len(pathParts) < 2 {
+			return "", "", fmt.Errorf("invalid GitHub URL format")
+		}
+		
+		return pathParts[0], pathParts[1], nil
+	}
+	
+	// Handle SSH URLs (git@github.com:owner/repo)
+	if strings.HasPrefix(url, "git@github.com:") {
+		path := strings.TrimPrefix(url, "git@github.com:")
+		pathParts := strings.Split(path, "/")
+		if len(pathParts) < 2 {
+			return "", "", fmt.Errorf("invalid GitHub SSH URL format")
+		}
+		
+		return pathParts[0], pathParts[1], nil
+	}
+	
+	return "", "", fmt.Errorf("unsupported GitHub URL format: %s", url)
 }
