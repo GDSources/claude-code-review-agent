@@ -1,3 +1,3 @@
-module github.com/your-org/review-agent
+module github.com/GDSources/claude-code-review-agent
 
-go 1.24.4
+go 1.21

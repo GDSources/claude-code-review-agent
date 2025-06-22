@@ -1,7 +1,7 @@
 package review
 
 import (
-	"github.com/your-org/review-agent/pkg/analyzer"
+	"github.com/GDSources/claude-code-review-agent/pkg/analyzer"
 )
 
 // AnalyzerAdapter adapts the analyzer package to implement CodeAnalyzer interface

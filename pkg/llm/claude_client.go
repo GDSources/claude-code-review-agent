@@ -10,7 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/your-org/review-agent/pkg/analyzer"
+	"github.com/GDSources/claude-code-review-agent/pkg/analyzer"
+	"github.com/GDSources/claude-code-review-agent/pkg/llm/claude"
 )
 
 // ClaudeClient implements the CodeReviewer interface for Anthropic's Claude
@@ -110,6 +111,12 @@ func NewClaudeClient(config ClaudeConfig) (*ClaudeClient, error) {
 		config:     config,
 		httpClient: httpClient,
 	}, nil
+}
+
+// String implements the Stringer interface to prevent accidental API key exposure
+func (c *ClaudeClient) String() string {
+	return fmt.Sprintf("ClaudeClient{model: %s, apiKey: %s, maxTokens: %d, temperature: %.2f, baseURL: %s}",
+		c.config.Model, claude.MaskAPIKey(c.config.APIKey), c.config.MaxTokens, c.config.Temperature, c.config.BaseURL)
 }
 
 // ReviewCode implements the CodeReviewer interface

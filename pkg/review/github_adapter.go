@@ -3,7 +3,7 @@ package review
 import (
 	"context"
 
-	"github.com/your-org/review-agent/pkg/github"
+	"github.com/GDSources/claude-code-review-agent/pkg/github"
 )
 
 type GitHubClientInterface interface {

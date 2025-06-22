@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/your-org/review-agent/pkg/analyzer"
-	"github.com/your-org/review-agent/pkg/github"
+	"github.com/GDSources/claude-code-review-agent/pkg/analyzer"
+	"github.com/GDSources/claude-code-review-agent/pkg/github"
 )
 
 func TestNewClaudeClient(t *testing.T) {

@@ -7,11 +7,11 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/your-org/review-agent/pkg/cli"
-	"github.com/your-org/review-agent/pkg/github"
-	"github.com/your-org/review-agent/pkg/llm"
-	"github.com/your-org/review-agent/pkg/review"
-	"github.com/your-org/review-agent/pkg/webhook"
+	"github.com/GDSources/claude-code-review-agent/pkg/cli"
+	"github.com/GDSources/claude-code-review-agent/pkg/github"
+	"github.com/GDSources/claude-code-review-agent/pkg/llm"
+	"github.com/GDSources/claude-code-review-agent/pkg/review"
+	"github.com/GDSources/claude-code-review-agent/pkg/webhook"
 )
 
 const (
