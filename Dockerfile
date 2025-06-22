@@ -23,8 +23,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o review-agent cmd/
 # Runtime stage
 FROM alpine:latest
 
-# Install git (needed for repository cloning) and ca-certificates (for HTTPS)
-RUN apk add --no-cache git ca-certificates tzdata
+# Install git (needed for repository cloning), ca-certificates (for HTTPS), and bash (for GitHub Actions)
+RUN apk add --no-cache git ca-certificates tzdata bash
 
 # Create non-root user
 RUN addgroup -g 1001 -S appgroup && \
@@ -35,6 +35,13 @@ WORKDIR /app
 
 # Copy binary from builder stage
 COPY --from=builder /app/review-agent .
+
+# Copy scripts for GitHub Action
+COPY scripts/action-entrypoint.sh ./scripts/
+RUN chmod +x ./scripts/action-entrypoint.sh
+
+# Install jq for parsing GitHub event JSON in action mode
+RUN apk add --no-cache jq
 
 # Create directory for workspace operations
 RUN mkdir -p /tmp/workspaces && chown -R appuser:appgroup /tmp/workspaces

@@ -50,6 +50,8 @@ func main() {
 		runInit(os.Args[2:])
 	case "version":
 		runVersion(os.Args[2:])
+	case "action":
+		runAction(os.Args[2:])
 	case "--help", "-h", "help":
 		printUsage()
 	default:
@@ -70,6 +72,7 @@ Commands:
   server      Start webhook server for automated reviews
   init        Create a sample .env file for configuration
   version     Show version information
+  action      Run in GitHub Action mode (internal use)
   help        Show this help message
 
 Use "review-agent <command> --help" for more information about a command.
@@ -97,7 +100,7 @@ Usage:
   review-agent review [flags]
 
 Flags:
-  --github-token    GitHub API token (or set GITHUB_TOKEN env var)
+  --github-token    GitHub API token (or set GH_TOKEN env var)
   --claude-key      Claude API key (or set CLAUDE_API_KEY env var)
   --claude-model    Claude model to use (or set CLAUDE_MODEL env var, default: claude-sonnet-4-20250514)
   --owner           Repository owner/organization (required)
@@ -124,7 +127,7 @@ Examples:
   review-agent review --owner myorg --repo myrepo --pr 123
 
   # Use environment variables
-  GITHUB_TOKEN=xxx CLAUDE_API_KEY=yyy review-agent review --owner myorg --repo myrepo --pr 123
+  GH_TOKEN=xxx CLAUDE_API_KEY=yyy review-agent review --owner myorg --repo myrepo --pr 123
 
   # Use command line flags
   review-agent review --github-token xxx --claude-key yyy --owner myorg --repo myrepo --pr 123
@@ -212,7 +215,7 @@ func loadEnvConfig(config *Config) error {
 
 	// Then apply environment variables (higher precedence than .env file)
 	if config.GitHubToken == "" {
-		config.GitHubToken = os.Getenv("GITHUB_TOKEN")
+		config.GitHubToken = os.Getenv("GH_TOKEN")
 	}
 	if config.ClaudeAPIKey == "" {
 		config.ClaudeAPIKey = os.Getenv("CLAUDE_API_KEY")
@@ -229,7 +232,7 @@ func loadEnvConfig(config *Config) error {
 
 func validateReviewConfig(config *Config, owner, repo string, prNumber int) error {
 	if config.GitHubToken == "" {
-		return fmt.Errorf("GitHub token is required (set --github-token flag, GITHUB_TOKEN env var, or add to .env file)")
+		return fmt.Errorf("GitHub token is required (set --github-token flag, GH_TOKEN env var, or add to .env file)")
 	}
 	if config.ClaudeAPIKey == "" {
 		return fmt.Errorf("Claude API key is required (set --claude-key flag, CLAUDE_API_KEY env var, or add to .env file)")
@@ -286,7 +289,7 @@ Usage:
   review-agent server [flags]
 
 Flags:
-  --github-token     GitHub API token (or set GITHUB_TOKEN env var)
+  --github-token     GitHub API token (or set GH_TOKEN env var)
   --claude-key       Claude API key (or set CLAUDE_API_KEY env var)
   --claude-model     Claude model to use (or set CLAUDE_MODEL env var, default: claude-sonnet-4-20250514)
   --webhook-secret   GitHub webhook secret (or set WEBHOOK_SECRET env var)
@@ -312,7 +315,7 @@ Examples:
   review-agent server                  # Start server with .env config
 
   # Use environment variables
-  GITHUB_TOKEN=xxx CLAUDE_API_KEY=yyy WEBHOOK_SECRET=zzz review-agent server
+  GH_TOKEN=xxx CLAUDE_API_KEY=yyy WEBHOOK_SECRET=zzz review-agent server
 
   # Use command line flags
   review-agent server --github-token xxx --claude-key yyy --webhook-secret zzz --port 3000
@@ -349,7 +352,7 @@ func loadServerConfig(config *ServerConfig) error {
 
 	// Then apply environment variables (higher precedence than .env file)
 	if config.GitHubToken == "" {
-		config.GitHubToken = os.Getenv("GITHUB_TOKEN")
+		config.GitHubToken = os.Getenv("GH_TOKEN")
 	}
 	if config.ClaudeAPIKey == "" {
 		config.ClaudeAPIKey = os.Getenv("CLAUDE_API_KEY")
@@ -373,7 +376,7 @@ func loadServerConfig(config *ServerConfig) error {
 
 func validateServerConfig(config *ServerConfig) error {
 	if config.GitHubToken == "" {
-		return fmt.Errorf("GitHub token is required (set --github-token flag, GITHUB_TOKEN env var, or add to .env file)")
+		return fmt.Errorf("GitHub token is required (set --github-token flag, GH_TOKEN env var, or add to .env file)")
 	}
 	if config.ClaudeAPIKey == "" {
 		return fmt.Errorf("Claude API key is required (set --claude-key flag, CLAUDE_API_KEY env var, or add to .env file)")
@@ -460,4 +463,30 @@ func startWebhookServer(config *ServerConfig) error {
 	fmt.Printf("🔍 Health check: http://localhost%s/health\n", addr)
 
 	return http.ListenAndServe(addr, nil)
+}
+
+func runAction(args []string) {
+	// This is a special mode for running inside GitHub Actions
+	// It uses environment variables set by the action wrapper
+	
+	fs := flag.NewFlagSet("action", flag.ExitOnError)
+	
+	fs.Usage = func() {
+		fmt.Print(`Run in GitHub Action mode (internal use)
+
+This command is used internally by the GitHub Action wrapper.
+It reads configuration from environment variables set by action.yml.
+`)
+	}
+	
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+	
+	// The action entrypoint script calls the review command directly
+	// This is just a placeholder in case we need special action behavior later
+	fmt.Println("Action mode is handled by the entrypoint script")
+	fmt.Println("This command should not be called directly")
+	os.Exit(1)
 }

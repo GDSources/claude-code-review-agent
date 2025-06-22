@@ -1,0 +1,69 @@
+name: 'Code Review Agent'
+description: 'Automated code review for GitHub pull requests using Claude AI'
+author: 'GDSources'
+branding:
+  icon: 'eye'
+  color: 'blue'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access'
+    required: true
+  claude-api-key:
+    description: 'Claude API key for AI reviews'
+    required: true
+  claude-model:
+    description: 'Claude model to use for reviews'
+    required: false
+    default: 'claude-sonnet-4-20250514'
+  pr-number:
+    description: 'Pull request number to review (auto-detected if not provided)'
+    required: false
+  repository:
+    description: 'Repository in format owner/repo (auto-detected if not provided)'
+    required: false
+  skip-draft:
+    description: 'Skip review for draft pull requests'
+    required: false
+    default: 'true'
+  skip-labels:
+    description: 'Comma-separated list of labels that skip review'
+    required: false
+    default: 'skip-review,wip'
+  review-paths:
+    description: 'Comma-separated list of paths to review (e.g., src/**/*.go)'
+    required: false
+  exclude-paths:
+    description: 'Comma-separated list of paths to exclude from review'
+    required: false
+    default: 'vendor/**,node_modules/**,*.lock,*.sum'
+  comment-threshold:
+    description: 'Minimum confidence threshold for posting comments (0-1)'
+    required: false
+    default: '0.7'
+
+outputs:
+  review-status:
+    description: 'Status of the review (success, skipped, failed)'
+  review-url:
+    description: 'URL to the pull request review'
+  comments-posted:
+    description: 'Number of review comments posted'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  env:
+    GH_TOKEN: ${{ inputs.github-token }}
+    CLAUDE_API_KEY: ${{ inputs.claude-api-key }}
+    CLAUDE_MODEL: ${{ inputs.claude-model }}
+    ACTION_PR_NUMBER: ${{ inputs.pr-number }}
+    ACTION_REPOSITORY: ${{ inputs.repository }}
+    ACTION_SKIP_DRAFT: ${{ inputs.skip-draft }}
+    ACTION_SKIP_LABELS: ${{ inputs.skip-labels }}
+    ACTION_REVIEW_PATHS: ${{ inputs.review-paths }}
+    ACTION_EXCLUDE_PATHS: ${{ inputs.exclude-paths }}
+    ACTION_COMMENT_THRESHOLD: ${{ inputs.comment-threshold }}
+  args:
+    - '/bin/bash'
+    - '/app/scripts/action-entrypoint.sh'

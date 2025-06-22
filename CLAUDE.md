@@ -23,7 +23,7 @@ go build -o bin/review-agent cmd/agent/main.go
 ./bin/review-agent
 
 # Run with environment variables
-GITHUB_TOKEN=your_token CLAUDE_API_KEY=your_key ./bin/review-agent
+GH_TOKEN=your_token CLAUDE_API_KEY=your_key ./bin/review-agent
 ```
 
 ### Testing
@@ -49,7 +49,7 @@ docker build -t review-agent:latest .
 
 # Run in container
 docker run --rm \
-  -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+  -e GH_TOKEN="${GH_TOKEN}" \
   -e CLAUDE_API_KEY="${CLAUDE_API_KEY}" \
   -e WEBHOOK_SECRET="${WEBHOOK_SECRET}" \
   -p 8080:8080 \

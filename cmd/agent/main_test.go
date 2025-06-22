@@ -8,12 +8,12 @@ import (
 
 func TestLoadEnvConfig(t *testing.T) {
 	// Save original env vars
-	originalGitHub := os.Getenv("GITHUB_TOKEN")
+	originalGitHub := os.Getenv("GH_TOKEN")
 	originalClaude := os.Getenv("CLAUDE_API_KEY")
 
 	// Clean up after test
 	defer func() {
-		os.Setenv("GITHUB_TOKEN", originalGitHub)
+		os.Setenv("GH_TOKEN", originalGitHub)
 		os.Setenv("CLAUDE_API_KEY", originalClaude)
 	}()
 
@@ -28,7 +28,7 @@ func TestLoadEnvConfig(t *testing.T) {
 			name:   "load from environment variables",
 			config: &Config{},
 			envVars: map[string]string{
-				"GITHUB_TOKEN":   "env-github-token",
+				"GH_TOKEN":   "env-github-token",
 				"CLAUDE_API_KEY": "env-claude-key",
 			},
 			expectedGitHub: "env-github-token",
@@ -41,7 +41,7 @@ func TestLoadEnvConfig(t *testing.T) {
 				ClaudeAPIKey: "flag-claude-key",
 			},
 			envVars: map[string]string{
-				"GITHUB_TOKEN":   "env-github-token",
+				"GH_TOKEN":   "env-github-token",
 				"CLAUDE_API_KEY": "env-claude-key",
 			},
 			expectedGitHub: "flag-github-token",
@@ -218,7 +218,7 @@ func TestLoadEnvConfig_WithEnvFile(t *testing.T) {
 	tempDir := t.TempDir()
 	envFile := filepath.Join(tempDir, ".env")
 
-	envContent := `GITHUB_TOKEN=env-file-github-token
+	envContent := `GH_TOKEN=env-file-github-token
 CLAUDE_API_KEY=env-file-claude-key
 `
 
@@ -229,21 +229,21 @@ CLAUDE_API_KEY=env-file-claude-key
 
 	// Save original working directory and environment variables
 	originalDir, _ := os.Getwd()
-	originalGitHub := os.Getenv("GITHUB_TOKEN")
+	originalGitHub := os.Getenv("GH_TOKEN")
 	originalClaude := os.Getenv("CLAUDE_API_KEY")
 
 	// Change to temp directory and clear env vars
 	os.Chdir(tempDir)
-	os.Unsetenv("GITHUB_TOKEN")
+	os.Unsetenv("GH_TOKEN")
 	os.Unsetenv("CLAUDE_API_KEY")
 
 	// Restore after test
 	defer func() {
 		os.Chdir(originalDir)
 		if originalGitHub != "" {
-			os.Setenv("GITHUB_TOKEN", originalGitHub)
+			os.Setenv("GH_TOKEN", originalGitHub)
 		} else {
-			os.Unsetenv("GITHUB_TOKEN")
+			os.Unsetenv("GH_TOKEN")
 		}
 		if originalClaude != "" {
 			os.Setenv("CLAUDE_API_KEY", originalClaude)
@@ -272,7 +272,7 @@ func TestLoadEnvConfig_PrecedenceOrder(t *testing.T) {
 	tempDir := t.TempDir()
 	envFile := filepath.Join(tempDir, ".env")
 
-	envContent := `GITHUB_TOKEN=env-file-token
+	envContent := `GH_TOKEN=env-file-token
 CLAUDE_API_KEY=env-file-key
 `
 
@@ -283,23 +283,23 @@ CLAUDE_API_KEY=env-file-key
 
 	// Save original working directory and environment variables
 	originalDir, _ := os.Getwd()
-	originalGitHub := os.Getenv("GITHUB_TOKEN")
+	originalGitHub := os.Getenv("GH_TOKEN")
 	originalClaude := os.Getenv("CLAUDE_API_KEY")
 
 	// Change to temp directory
 	os.Chdir(tempDir)
 
 	// Set environment variables (should take precedence over .env file)
-	os.Setenv("GITHUB_TOKEN", "env-var-token")
+	os.Setenv("GH_TOKEN", "env-var-token")
 	os.Unsetenv("CLAUDE_API_KEY") // Let this come from .env file
 
 	// Restore after test
 	defer func() {
 		os.Chdir(originalDir)
 		if originalGitHub != "" {
-			os.Setenv("GITHUB_TOKEN", originalGitHub)
+			os.Setenv("GH_TOKEN", originalGitHub)
 		} else {
-			os.Unsetenv("GITHUB_TOKEN")
+			os.Unsetenv("GH_TOKEN")
 		}
 		if originalClaude != "" {
 			os.Setenv("CLAUDE_API_KEY", originalClaude)
@@ -335,7 +335,7 @@ func TestLoadServerConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	envFile := filepath.Join(tempDir, ".env")
 
-	envContent := `GITHUB_TOKEN=env-file-github-token
+	envContent := `GH_TOKEN=env-file-github-token
 CLAUDE_API_KEY=env-file-claude-key
 WEBHOOK_SECRET=env-file-webhook-secret
 PORT=3000
@@ -348,14 +348,14 @@ PORT=3000
 
 	// Save original working directory and environment variables
 	originalDir, _ := os.Getwd()
-	originalGitHub := os.Getenv("GITHUB_TOKEN")
+	originalGitHub := os.Getenv("GH_TOKEN")
 	originalClaude := os.Getenv("CLAUDE_API_KEY")
 	originalWebhook := os.Getenv("WEBHOOK_SECRET")
 	originalPort := os.Getenv("PORT")
 
 	// Change to temp directory and clear env vars
 	os.Chdir(tempDir)
-	os.Unsetenv("GITHUB_TOKEN")
+	os.Unsetenv("GH_TOKEN")
 	os.Unsetenv("CLAUDE_API_KEY")
 	os.Unsetenv("WEBHOOK_SECRET")
 	os.Unsetenv("PORT")
@@ -363,7 +363,7 @@ PORT=3000
 	// Restore after test
 	defer func() {
 		os.Chdir(originalDir)
-		restoreEnvVar("GITHUB_TOKEN", originalGitHub)
+		restoreEnvVar("GH_TOKEN", originalGitHub)
 		restoreEnvVar("CLAUDE_API_KEY", originalClaude)
 		restoreEnvVar("WEBHOOK_SECRET", originalWebhook)
 		restoreEnvVar("PORT", originalPort)

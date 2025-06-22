@@ -1,0 +1,143 @@
+name: Manual Code Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: 'Pull Request number to review'
+        required: true
+        type: number
+      claude-model:
+        description: 'Claude model to use'
+        required: false
+        type: choice
+        default: 'claude-sonnet-4-20250514'
+        options:
+          - claude-3-5-haiku-20241022
+          - claude-3-5-sonnet-20241022
+          - claude-3-5-sonnet-20250106
+          - claude-3-7-haiku-20250109
+          - claude-3-7-sonnet-20250109
+          - claude-sonnet-4-20250514
+      review-paths:
+        description: 'Specific paths to review (comma-separated, optional)'
+        required: false
+        type: string
+      force-review:
+        description: 'Force review even for draft PRs'
+        required: false
+        type: boolean
+        default: false
+  
+  # Also allow triggering via PR comment
+  issue_comment:
+    types: [created]
+
+jobs:
+  # Handle manual workflow dispatch
+  manual-review:
+    name: Manual Code Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Run Code Review Agent
+        id: review
+        uses: ./  # Use this repository's action
+        # For external usage, replace with: uses: your-org/review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          pr-number: ${{ inputs.pr-number }}
+          claude-model: ${{ inputs.claude-model }}
+          review-paths: ${{ inputs.review-paths }}
+          skip-draft: ${{ !inputs.force-review }}
+      
+      - name: Post completion comment
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: ${{ inputs.pr-number }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ Manual code review completed!\n\n- **Status**: ${{ steps.review.outputs.review-status }}\n- **Comments posted**: ${{ steps.review.outputs.comments-posted }}\n- **Model used**: ${{ inputs.claude-model }}`
+            });
+
+  # Handle PR comment triggers
+  comment-review:
+    name: Comment-triggered Review
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/review')
+    
+    steps:
+      - name: Add reaction
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.reactions.createForIssueComment({
+              comment_id: context.payload.comment.id,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              content: 'eyes'
+            });
+      
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Parse comment for options
+        id: parse
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = context.payload.comment.body;
+            
+            // Extract model if specified (e.g., "/review model:claude-3-7-sonnet")
+            const modelMatch = comment.match(/model:(\S+)/);
+            const model = modelMatch ? modelMatch[1] : 'claude-sonnet-4-20250514';
+            
+            // Extract paths if specified (e.g., "/review paths:src/**,pkg/**")
+            const pathsMatch = comment.match(/paths:(\S+)/);
+            const paths = pathsMatch ? pathsMatch[1] : '';
+            
+            // Check for force flag
+            const force = comment.includes('--force');
+            
+            core.setOutput('model', model);
+            core.setOutput('paths', paths);
+            core.setOutput('force', force);
+      
+      - name: Run Code Review Agent
+        id: review
+        uses: ./  # Use this repository's action
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          pr-number: ${{ github.event.issue.number }}
+          claude-model: ${{ steps.parse.outputs.model }}
+          review-paths: ${{ steps.parse.outputs.paths }}
+          skip-draft: ${{ !steps.parse.outputs.force }}
+      
+      - name: Update reaction on completion
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const content = ${{ job.status }} === 'success' ? 'rocket' : 'confused';
+            github.rest.reactions.createForIssueComment({
+              comment_id: context.payload.comment.id,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              content: content
+            });

@@ -58,7 +58,7 @@ func TestEnvLoader_LoadEnvFile_Success(t *testing.T) {
 	tempDir := t.TempDir()
 	envFile := filepath.Join(tempDir, ".env")
 
-	envContent := `GITHUB_TOKEN=test-github-token
+	envContent := `GH_TOKEN=test-github-token
 CLAUDE_API_KEY=test-claude-key
 # This is a comment
 QUOTED_VALUE="quoted value"
@@ -74,7 +74,7 @@ EQUALS_IN_VALUE=key=value=more
 
 	// Save original env vars
 	originalVars := map[string]string{
-		"GITHUB_TOKEN":    os.Getenv("GITHUB_TOKEN"),
+		"GH_TOKEN":    os.Getenv("GH_TOKEN"),
 		"CLAUDE_API_KEY":  os.Getenv("CLAUDE_API_KEY"),
 		"QUOTED_VALUE":    os.Getenv("QUOTED_VALUE"),
 		"SINGLE_QUOTED":   os.Getenv("SINGLE_QUOTED"),
@@ -112,7 +112,7 @@ EQUALS_IN_VALUE=key=value=more
 		key      string
 		expected string
 	}{
-		{"GITHUB_TOKEN", "test-github-token"},
+		{"GH_TOKEN", "test-github-token"},
 		{"CLAUDE_API_KEY", "test-claude-key"},
 		{"QUOTED_VALUE", "quoted value"},
 		{"SINGLE_QUOTED", "single quoted"},
@@ -133,7 +133,7 @@ func TestEnvLoader_LoadEnvFile_PrecedenceRespected(t *testing.T) {
 	tempDir := t.TempDir()
 	envFile := filepath.Join(tempDir, ".env")
 
-	envContent := `GITHUB_TOKEN=env-file-token
+	envContent := `GH_TOKEN=env-file-token
 CLAUDE_API_KEY=env-file-key
 `
 
@@ -143,18 +143,18 @@ CLAUDE_API_KEY=env-file-key
 	}
 
 	// Set environment variables (should take precedence)
-	originalGitHub := os.Getenv("GITHUB_TOKEN")
+	originalGitHub := os.Getenv("GH_TOKEN")
 	originalClaude := os.Getenv("CLAUDE_API_KEY")
 
-	os.Setenv("GITHUB_TOKEN", "env-var-token")
+	os.Setenv("GH_TOKEN", "env-var-token")
 	// Leave CLAUDE_API_KEY unset to test .env file fallback
 	os.Unsetenv("CLAUDE_API_KEY")
 
 	defer func() {
 		if originalGitHub != "" {
-			os.Setenv("GITHUB_TOKEN", originalGitHub)
+			os.Setenv("GH_TOKEN", originalGitHub)
 		} else {
-			os.Unsetenv("GITHUB_TOKEN")
+			os.Unsetenv("GH_TOKEN")
 		}
 		if originalClaude != "" {
 			os.Setenv("CLAUDE_API_KEY", originalClaude)
@@ -173,8 +173,8 @@ CLAUDE_API_KEY=env-file-key
 	}
 
 	// Environment variable should be preserved
-	if os.Getenv("GITHUB_TOKEN") != "env-var-token" {
-		t.Errorf("expected GITHUB_TOKEN=env-var-token, got %s", os.Getenv("GITHUB_TOKEN"))
+	if os.Getenv("GH_TOKEN") != "env-var-token" {
+		t.Errorf("expected GH_TOKEN=env-var-token, got %s", os.Getenv("GH_TOKEN"))
 	}
 
 	// .env file value should be used when env var is not set
@@ -284,7 +284,7 @@ func TestEnvLoader_CreateSampleEnvFile(t *testing.T) {
 
 	// Verify expected keys are present
 	expectedKeys := []string{
-		"GITHUB_TOKEN=",
+		"GH_TOKEN=",
 		"CLAUDE_API_KEY=",
 		"WEBHOOK_SECRET=",
 	}
