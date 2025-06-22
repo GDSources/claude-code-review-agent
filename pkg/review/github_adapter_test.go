@@ -204,6 +204,7 @@ func TestNewGitHubClonerAdapter(t *testing.T) {
 
 	if adapter == nil {
 		t.Error("expected adapter to be created")
+		return // Exit early to avoid nil pointer dereference
 	}
 
 	// We can't directly compare interface values, but we can verify the adapter is configured

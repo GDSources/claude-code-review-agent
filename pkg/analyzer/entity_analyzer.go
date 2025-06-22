@@ -783,7 +783,7 @@ func (cb *DefaultAIContextBuilder) formatCodebaseContext(codebase *FlattenedCode
 
 	// Project overview
 	builder.WriteString("# Codebase Analysis\n\n")
-	builder.WriteString(fmt.Sprintf("## Project Overview\n"))
+	builder.WriteString("## Project Overview\n")
 	builder.WriteString(fmt.Sprintf("- **Type**: %s\n", codebase.ProjectInfo.Type))
 	builder.WriteString(fmt.Sprintf("- **Name**: %s\n", codebase.ProjectInfo.Name))
 	builder.WriteString(fmt.Sprintf("- **Total Files**: %d\n", codebase.TotalFiles))

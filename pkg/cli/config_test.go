@@ -74,7 +74,7 @@ EQUALS_IN_VALUE=key=value=more
 
 	// Save original env vars
 	originalVars := map[string]string{
-		"GH_TOKEN":    os.Getenv("GH_TOKEN"),
+		"GH_TOKEN":        os.Getenv("GH_TOKEN"),
 		"CLAUDE_API_KEY":  os.Getenv("CLAUDE_API_KEY"),
 		"QUOTED_VALUE":    os.Getenv("QUOTED_VALUE"),
 		"SINGLE_QUOTED":   os.Getenv("SINGLE_QUOTED"),
@@ -258,8 +258,8 @@ func TestEnvLoader_CreateSampleEnvFile(t *testing.T) {
 	// Change to temporary directory
 	originalDir, _ := os.Getwd()
 	tempDir := t.TempDir()
-	os.Chdir(tempDir)
-	defer os.Chdir(originalDir)
+	_ = os.Chdir(tempDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	loader := NewEnvLoader()
 

@@ -68,15 +68,15 @@ func SanitizeInput(input string) string {
 			result.WriteRune(r)
 		}
 	}
-	
+
 	sanitized := result.String()
-	
+
 	// Limit input length to prevent memory issues
 	const maxInputLength = 100000 // 100KB limit
 	if len(sanitized) > maxInputLength {
 		sanitized = sanitized[:maxInputLength] + "... [truncated]"
 	}
-	
+
 	return sanitized
 }
 
@@ -85,23 +85,23 @@ func ValidateAPIKey(apiKey string) error {
 	if apiKey == "" {
 		return fmt.Errorf("API key cannot be empty")
 	}
-	
+
 	// Check for reasonable API key patterns (Claude keys start with sk-ant-)
 	if !strings.HasPrefix(apiKey, "sk-ant-") {
 		return fmt.Errorf("API key format appears invalid")
 	}
-	
+
 	// Check length (typical Claude API keys are around 100+ characters)
 	if len(apiKey) < 50 {
 		return fmt.Errorf("API key appears too short")
 	}
-	
+
 	// Check for suspicious characters
 	suspiciousPattern := regexp.MustCompile(`[<>{}|&;$()'"\\]`)
 	if suspiciousPattern.MatchString(apiKey) {
 		return fmt.Errorf("API key contains suspicious characters")
 	}
-	
+
 	return nil
 }
 
@@ -110,9 +110,9 @@ func SanitizeAndValidatePrompt(prompt string) (string, error) {
 	if prompt == "" {
 		return "", fmt.Errorf("prompt cannot be empty")
 	}
-	
+
 	sanitized := SanitizeInput(prompt)
-	
+
 	// Check for potential prompt injection patterns
 	suspiciousPatterns := []string{
 		"ignore previous instructions",
@@ -122,21 +122,21 @@ func SanitizeAndValidatePrompt(prompt string) (string, error) {
 		"javascript:",
 		"eval(",
 	}
-	
+
 	lowerPrompt := strings.ToLower(sanitized)
 	for _, pattern := range suspiciousPatterns {
 		if strings.Contains(lowerPrompt, pattern) {
 			return "", fmt.Errorf("prompt contains potentially malicious content")
 		}
 	}
-	
+
 	return sanitized, nil
 }
 
 // ValidateResourceLimits validates that input adheres to resource limits
 func ValidateResourceLimits(content string, limits ResourceLimits) error {
 	if len(content) > limits.MaxPromptLength {
-		return fmt.Errorf("content exceeds maximum prompt length (%d > %d)", 
+		return fmt.Errorf("content exceeds maximum prompt length (%d > %d)",
 			len(content), limits.MaxPromptLength)
 	}
 	return nil
@@ -147,7 +147,7 @@ func TruncateWithLimits(content string, limits ResourceLimits) string {
 	if len(content) <= limits.MaxPromptLength {
 		return content
 	}
-	
+
 	truncated := content[:limits.MaxPromptLength-20] // Leave room for truncation notice
 	return truncated + "\n... [truncated for size]"
 }
@@ -155,15 +155,15 @@ func TruncateWithLimits(content string, limits ResourceLimits) string {
 // ValidateCodebaseSize checks if codebase size is within limits
 func ValidateCodebaseSize(totalSize int64, fileCount int, limits ResourceLimits) error {
 	if totalSize > limits.MaxCodebaseSize {
-		return fmt.Errorf("codebase size exceeds limit (%d MB > %d MB)", 
+		return fmt.Errorf("codebase size exceeds limit (%d MB > %d MB)",
 			totalSize/(1024*1024), limits.MaxCodebaseSize/(1024*1024))
 	}
-	
+
 	if fileCount > limits.MaxFileCount {
-		return fmt.Errorf("file count exceeds limit (%d > %d)", 
+		return fmt.Errorf("file count exceeds limit (%d > %d)",
 			fileCount, limits.MaxFileCount)
 	}
-	
+
 	return nil
 }
 

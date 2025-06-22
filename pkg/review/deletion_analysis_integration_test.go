@@ -483,9 +483,7 @@ func (m *integrationMockGitHubCommentClient) CreatePullRequestComment(ctx contex
 }
 
 func (m *integrationMockGitHubCommentClient) CreatePullRequestComments(ctx context.Context, owner, repo string, prNumber int, comments []github.CreatePullRequestCommentRequest) (*github.CommentPostingResult, error) {
-	for _, comment := range comments {
-		m.postedComments = append(m.postedComments, comment)
-	}
+	m.postedComments = append(m.postedComments, comments...)
 
 	return &github.CommentPostingResult{
 		SuccessfulComments: make([]github.PullRequestComment, len(comments)),

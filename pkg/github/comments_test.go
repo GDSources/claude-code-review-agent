@@ -39,7 +39,7 @@ func TestMakeRequestWithBody(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"status": "created"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "created"})
 	}))
 	defer server.Close()
 
@@ -110,7 +110,7 @@ func TestCreatePullRequestComment_Success(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -166,7 +166,7 @@ func TestCreatePullRequestComment_APIError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				w.Write([]byte(tt.responseBody))
+				_, _ = w.Write([]byte(tt.responseBody))
 			}))
 			defer server.Close()
 
@@ -300,7 +300,7 @@ func TestCreatePullRequestComments_Batch(t *testing.T) {
 		requestCount++
 
 		var requestBody CreatePullRequestCommentRequest
-		json.NewDecoder(r.Body).Decode(&requestBody)
+		_ = json.NewDecoder(r.Body).Decode(&requestBody)
 
 		// Verify we receive expected comments
 		found := false
@@ -323,7 +323,7 @@ func TestCreatePullRequestComments_Batch(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -359,7 +359,7 @@ func TestCreatePullRequestComments_PartialFailure(t *testing.T) {
 		requestCount++
 
 		var requestBody CreatePullRequestCommentRequest
-		json.NewDecoder(r.Body).Decode(&requestBody)
+		_ = json.NewDecoder(r.Body).Decode(&requestBody)
 
 		// First comment succeeds, second fails
 		if requestCount == 1 {
@@ -369,10 +369,10 @@ func TestCreatePullRequestComments_PartialFailure(t *testing.T) {
 				Path: requestBody.Path,
 			}
 			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 		} else {
 			w.WriteHeader(http.StatusUnprocessableEntity)
-			w.Write([]byte(`{"message": "Invalid line number"}`))
+			_, _ = w.Write([]byte(`{"message": "Invalid line number"}`))
 		}
 	}))
 	defer server.Close()
@@ -438,7 +438,7 @@ func TestGetPullRequestComments(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(expectedComments)
+		_ = json.NewEncoder(w).Encode(expectedComments)
 	}))
 	defer server.Close()
 

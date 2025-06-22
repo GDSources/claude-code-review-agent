@@ -15,6 +15,7 @@ func TestNewPRReviewer(t *testing.T) {
 
 	if reviewer == nil {
 		t.Error("expected reviewer to be created")
+		return // Exit early to avoid nil pointer dereference
 	}
 
 	if reviewer.githubClient == nil {

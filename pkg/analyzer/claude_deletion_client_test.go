@@ -270,7 +270,7 @@ const DELETED_CONSTANT = "gone";`,
 func TestClaudeDeletionClient_Configuration(t *testing.T) {
 	// Test valid configuration
 	config := ClaudeAnalyzerConfig{
-		APIKey:      "test-key",
+		APIKey:      "sk-ant-api03-1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 		Model:       "claude-sonnet-4-20250514",
 		MaxTokens:   4000,
 		Temperature: 0.1,
@@ -283,8 +283,9 @@ func TestClaudeDeletionClient_Configuration(t *testing.T) {
 		t.Fatalf("Failed to create client with valid config: %v", err)
 	}
 
-	if client.apiKey != "test-key" {
-		t.Errorf("Expected API key 'test-key', got '%s'", client.apiKey)
+	expectedKey := "sk-ant-api03-1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	if client.apiKey != expectedKey {
+		t.Errorf("Expected API key '%s', got '%s'", expectedKey, client.apiKey)
 	}
 
 	// Test missing API key
@@ -300,7 +301,7 @@ func TestClaudeDeletionClient_Configuration(t *testing.T) {
 
 	// Test invalid temperature
 	invalidConfig = ClaudeAnalyzerConfig{
-		APIKey:      "test-key",
+		APIKey:      "sk-ant-api03-1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 		Temperature: 3.0, // Invalid: > 2.0
 	}
 
@@ -313,7 +314,7 @@ func TestClaudeDeletionClient_Configuration(t *testing.T) {
 func TestClaudeDeletionClient_DefaultConfiguration(t *testing.T) {
 	// Test that defaults are properly applied
 	config := ClaudeAnalyzerConfig{
-		APIKey: "test-key",
+		APIKey: "sk-ant-api03-1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 		// All other fields should get defaults
 	}
 

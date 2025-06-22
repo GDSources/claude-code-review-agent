@@ -20,7 +20,8 @@
       "Bash(CLAUDE_MODEL=claude-3-7-haiku-20250109 ./bin/review-agent review --github-token=test --claude-key=test --owner=test --repo=test --pr=1 2 >& 1)",
       "Bash(CLAUDE_MODEL=claude-3-sonnet-20240229 ./bin/review-agent review --github-token=test --claude-key=test --owner=test --repo=test --pr=1 2 >& 1)",
       "Bash(git add:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(gofmt:*)"
     ],
     "deny": []
   }
