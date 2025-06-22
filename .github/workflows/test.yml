@@ -143,6 +143,7 @@ jobs:
           docker run -d --name test-container \
             -e GH_TOKEN="dummy" \
             -e CLAUDE_API_KEY="dummy" \
+            -e WEBHOOK_SECRET="dummy-webhook-secret" \
             -p 8080:8080 \
             review-agent:test
           
