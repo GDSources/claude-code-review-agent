@@ -1,0 +1,163 @@
+name: Test
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/test.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/test.yml'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        go-version: ['1.21', '1.22']
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+      
+      - name: Download dependencies
+        run: go mod download
+      
+      - name: Verify dependencies
+        run: go mod verify
+      
+      - name: Check formatting
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not properly formatted:"
+            gofmt -s -l .
+            exit 1
+          fi
+      
+      - name: Run go vet
+        run: go vet ./...
+      
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          skip-cache: false
+          skip-pkg-cache: false
+          skip-build-cache: false
+      
+      - name: Run tests
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+      
+      - name: Generate coverage report
+        run: go tool cover -html=coverage.out -o coverage.html
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+      
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.go-version }}
+          path: |
+            coverage.out
+            coverage.html
+          retention-days: 30
+      
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "Go Version: ${{ matrix.go-version }}"
+          echo "Test Status: ${{ job.status }}"
+          if [ -f coverage.out ]; then
+            echo "Coverage: $(go tool cover -func=coverage.out | grep total | awk '{print $3}')"
+          fi
+
+  # Build test to ensure the application compiles correctly
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+      
+      - name: Build application
+        run: go build -v -o bin/review-agent cmd/agent/main.go
+      
+      - name: Build Linux binary
+        run: CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/review-agent-linux cmd/agent/main.go
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: bin/
+          retention-days: 7
+
+  # Integration test with Docker
+  docker-test:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: docker build -t review-agent:test .
+      
+      - name: Test Docker image health
+        run: |
+          # Run container in background
+          docker run -d --name test-container \
+            -e GH_TOKEN="dummy" \
+            -e CLAUDE_API_KEY="dummy" \
+            -p 8080:8080 \
+            review-agent:test
+          
+          # Wait for container to start
+          sleep 5
+          
+          # Check if container is still running
+          if ! docker ps | grep -q test-container; then
+            echo "Container failed to start"
+            docker logs test-container
+            exit 1
+          fi
+          
+          # Cleanup
+          docker stop test-container
+          docker rm test-container
+          
+          echo "Docker image test passed"
