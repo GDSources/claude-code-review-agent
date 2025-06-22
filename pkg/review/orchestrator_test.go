@@ -121,7 +121,7 @@ func TestDefaultReviewOrchestrator_HandlePullRequest(t *testing.T) {
 			orchestrator := NewDefaultReviewOrchestratorLegacy(mockWM)
 			event := createTestPullRequestEvent()
 
-			err := orchestrator.HandlePullRequest(event)
+			result, err := orchestrator.HandlePullRequest(event)
 
 			// Check error expectations
 			if tt.expectError && err == nil {
@@ -129,6 +129,18 @@ func TestDefaultReviewOrchestrator_HandlePullRequest(t *testing.T) {
 			}
 			if !tt.expectError && err != nil {
 				t.Errorf("unexpected error: %v", err)
+			}
+
+			// Check result expectations
+			if result == nil {
+				t.Error("expected result to be returned")
+			} else {
+				if !tt.expectError && result.Status != "success" {
+					t.Errorf("expected status 'success', got '%s'", result.Status)
+				}
+				if tt.expectError && result.Status != "failed" {
+					t.Errorf("expected status 'failed', got '%s'", result.Status)
+				}
 			}
 			if tt.errorContains != "" && (err == nil || err.Error() == "" || err.Error()[:len(tt.errorContains)] != tt.errorContains[:len(tt.errorContains)]) {
 				if err != nil && err.Error() != "" {
@@ -170,10 +182,17 @@ func TestDefaultReviewOrchestrator_WorkspaceIntegration(t *testing.T) {
 	orchestrator := NewDefaultReviewOrchestratorLegacy(mockWM)
 	event := createTestPullRequestEvent()
 
-	err := orchestrator.HandlePullRequest(event)
+	result, err := orchestrator.HandlePullRequest(event)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
 	}
 
 	// Verify workspace was created with correct event data
@@ -391,9 +410,19 @@ func TestDefaultReviewOrchestrator_PostComments_Success(t *testing.T) {
 	event := createTestPullRequestEvent()
 
 	// Execute the review
-	err := orchestrator.HandlePullRequest(event)
+	result, err := orchestrator.HandlePullRequest(event)
 	if err != nil {
 		t.Fatalf("HandlePullRequest failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
+	}
+	if result.CommentsPosted != 2 {
+		t.Errorf("expected 2 comments posted, got %d", result.CommentsPosted)
 	}
 
 	// Verify comments were posted
@@ -458,11 +487,18 @@ func TestDefaultReviewOrchestrator_PostComments_Failure(t *testing.T) {
 	}
 
 	// Execute the review
-	err := orchestrator.HandlePullRequest(createTestPullRequestEvent())
+	result, err := orchestrator.HandlePullRequest(createTestPullRequestEvent())
 
 	// Should not fail even if comment posting fails
 	if err != nil {
 		t.Errorf("HandlePullRequest should not fail when comment posting fails, got: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
 	}
 
 	// Verify comment posting was attempted
@@ -501,8 +537,18 @@ func TestDefaultReviewOrchestrator_WithoutGitHubClient(t *testing.T) {
 	}
 
 	// Should succeed without trying to post comments
-	err := orchestrator.HandlePullRequest(createTestPullRequestEvent())
+	result, err := orchestrator.HandlePullRequest(createTestPullRequestEvent())
 	if err != nil {
 		t.Errorf("HandlePullRequest should succeed without GitHub client, got: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
+	}
+	if result.CommentsPosted != 0 {
+		t.Errorf("expected 0 comments posted without GitHub client, got %d", result.CommentsPosted)
 	}
 }
