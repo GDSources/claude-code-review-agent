@@ -92,14 +92,21 @@ func NewReviewOrchestratorWithDeletionAnalysis(workspaceManager WorkspaceManager
 	}
 }
 
-func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) error {
+func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (*ReviewResult, error) {
 	ctx := context.Background()
 
 	log.Printf("Starting review for PR #%d in %s", event.Number, event.Repository.FullName)
 
+	result := &ReviewResult{
+		CommentsPosted: 0,
+		Status:         "success",
+		Summary:        "",
+	}
+
 	workspace, err := r.workspaceManager.CreateWorkspace(ctx, event)
 	if err != nil {
-		return fmt.Errorf("failed to create workspace for PR #%d: %w", event.Number, err)
+		result.Status = "failed"
+		return result, fmt.Errorf("failed to create workspace for PR #%d: %w", event.Number, err)
 	}
 
 	defer func() {
@@ -160,9 +167,11 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) e
 
 			// Post generated comments back to GitHub PR
 			if r.githubClient != nil {
-				err := r.postReviewComments(ctx, reviewData, reviewResponse)
+				commentsPosted, err := r.postReviewComments(ctx, reviewData, reviewResponse)
 				if err != nil {
 					log.Printf("Warning: Failed to post comments to PR #%d: %v", event.Number, err)
+				} else {
+					result.CommentsPosted = commentsPosted
 				}
 			} else {
 				log.Printf("GitHub client not configured, skipping comment posting for PR #%d", event.Number)
@@ -175,7 +184,7 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) e
 	}
 
 	log.Printf("Review completed for PR #%d", event.Number)
-	return nil
+	return result, nil
 }
 
 // fetchPRDiff fetches the diff for a pull request
@@ -357,10 +366,10 @@ func (r *DefaultReviewOrchestrator) logReviewResults(response *llm.ReviewRespons
 	}
 }
 
-// postReviewComments posts LLM-generated comments to the GitHub PR
-func (r *DefaultReviewOrchestrator) postReviewComments(ctx context.Context, reviewData *ReviewData, reviewResponse *llm.ReviewResponse) error {
+// postReviewComments posts LLM-generated comments to the GitHub PR and returns the count of successfully posted comments
+func (r *DefaultReviewOrchestrator) postReviewComments(ctx context.Context, reviewData *ReviewData, reviewResponse *llm.ReviewResponse) (int, error) {
 	if r.githubClient == nil {
-		return fmt.Errorf("GitHub client not configured")
+		return 0, fmt.Errorf("GitHub client not configured")
 	}
 
 	// Get the commit SHA from the PR head
@@ -387,7 +396,7 @@ func (r *DefaultReviewOrchestrator) postReviewComments(ctx context.Context, revi
 
 	if len(githubComments) == 0 {
 		log.Printf("No valid line-specific comments to post for PR #%d", reviewData.Event.Number)
-		return nil
+		return 0, nil
 	}
 
 	// Post comments in batch
@@ -399,7 +408,7 @@ func (r *DefaultReviewOrchestrator) postReviewComments(ctx context.Context, revi
 		githubComments,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to post comments: %w", err)
+		return 0, fmt.Errorf("failed to post comments: %w", err)
 	}
 
 	// Log results
@@ -414,7 +423,7 @@ func (r *DefaultReviewOrchestrator) postReviewComments(ctx context.Context, revi
 			failed.Request.Path, failed.Request.Line, failed.Error)
 	}
 
-	return nil
+	return len(result.SuccessfulComments), nil
 }
 
 // extractDeletedContent extracts deleted code from a parsed diff

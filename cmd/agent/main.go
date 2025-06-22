@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -149,9 +150,15 @@ Examples:
 		os.Exit(1)
 	}
 
-	if err := executeReview(config, owner, repo, prNumber); err != nil {
+	result, err := executeReview(config, owner, repo, prNumber)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "❌ Review failed: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Output structured JSON for action script parsing
+	if result != nil {
+		fmt.Printf("REVIEW_RESULT_JSON:%s\n", mustMarshalJSON(result))
 	}
 }
 
@@ -249,7 +256,7 @@ func validateReviewConfig(config *Config, owner, repo string, prNumber int) erro
 	return nil
 }
 
-func executeReview(config *Config, owner, repo string, prNumber int) error {
+func executeReview(config *Config, owner, repo string, prNumber int) (*review.ReviewResult, error) {
 	fmt.Printf("🔍 Starting review for PR #%d in %s/%s...\n", prNumber, owner, repo)
 
 	// Create reviewer with configuration
@@ -262,11 +269,49 @@ func executeReview(config *Config, owner, repo string, prNumber int) error {
 	reviewer := cli.NewPRReviewer(reviewConfig)
 
 	// Execute the review
-	if err := reviewer.ReviewPR(owner, repo, prNumber); err != nil {
-		return err
+	result, err := reviewer.ReviewPR(owner, repo, prNumber)
+	if err != nil {
+		return result, err
 	}
 
-	return nil
+	return result, nil
+}
+
+// mustMarshalJSON marshals data to JSON or panics on error
+func mustMarshalJSON(v interface{}) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal JSON: %v", err))
+	}
+	return string(data)
+}
+
+// OrchestratorAdapter adapts review.ReviewOrchestrator to webhook.ReviewOrchestrator
+type OrchestratorAdapter struct {
+	orchestrator review.ReviewOrchestrator
+}
+
+func (a *OrchestratorAdapter) HandlePullRequest(event *webhook.PullRequestEvent) (*webhook.ReviewResult, error) {
+	result, err := a.orchestrator.HandlePullRequest(event)
+	if err != nil {
+		return convertReviewResult(result), err
+	}
+	return convertReviewResult(result), nil
+}
+
+func convertReviewResult(result *review.ReviewResult) *webhook.ReviewResult {
+	if result == nil {
+		return &webhook.ReviewResult{
+			CommentsPosted: 0,
+			Status:         "failed",
+			Summary:        "",
+		}
+	}
+	return &webhook.ReviewResult{
+		CommentsPosted: result.CommentsPosted,
+		Status:         result.Status,
+		Summary:        result.Summary,
+	}
 }
 
 func runServer(args []string) {
@@ -441,8 +486,11 @@ func startWebhookServer(config *ServerConfig) error {
 	// Create review orchestrator with LLM and comment posting integration
 	orchestrator := review.NewReviewOrchestratorWithComments(workspaceManager, diffFetcher, codeAnalyzer, claudeClient, githubClient)
 
+	// Create adapter to bridge between review and webhook types
+	adapter := &OrchestratorAdapter{orchestrator: orchestrator}
+
 	// Create event processor
-	eventProcessor := webhook.NewGitHubEventProcessor(orchestrator)
+	eventProcessor := webhook.NewGitHubEventProcessor(adapter)
 
 	// Create HMAC validator
 	validator := webhook.NewHMACValidator(config.WebhookSecret)
