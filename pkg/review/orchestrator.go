@@ -157,11 +157,14 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (
 			UpdateProgressStage(reviewProgress, "failed", fmt.Sprintf("Failed to create workspace: %v", err))
 			reviewProgress.Summary = "Review failed during workspace setup"
 			commentBody := GenerateProgressComment(reviewProgress)
-			r.githubClient.UpdateIssueComment(ctx,
+			_, updateErr := r.githubClient.UpdateIssueComment(ctx,
 				event.Repository.Owner.Login,
 				event.Repository.Name,
 				int(progressComment.ID),
 				commentBody)
+			if updateErr != nil {
+				log.Printf("Warning: failed to update progress comment with failure: %v", updateErr)
+			}
 		}
 		result.Status = "failed"
 		return result, fmt.Errorf("failed to create workspace for PR #%d: %w", event.Number, err)
@@ -183,11 +186,14 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (
 		if r.githubClient != nil && progressComment != nil && reviewProgress != nil {
 			UpdateProgressStage(reviewProgress, "analyzing", "Analyzing code changes...")
 			commentBody := GenerateProgressComment(reviewProgress)
-			r.githubClient.UpdateIssueComment(ctx,
+			_, updateErr := r.githubClient.UpdateIssueComment(ctx,
 				event.Repository.Owner.Login,
 				event.Repository.Name,
 				int(progressComment.ID),
 				commentBody)
+			if updateErr != nil {
+				log.Printf("Warning: failed to update progress comment to analyzing stage: %v", updateErr)
+			}
 		}
 
 		diffResult, err := r.fetchPRDiff(ctx, event)
@@ -229,11 +235,14 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (
 		if r.githubClient != nil && progressComment != nil && reviewProgress != nil {
 			UpdateProgressStage(reviewProgress, "reviewing", "Generating review comments...")
 			commentBody := GenerateProgressComment(reviewProgress)
-			r.githubClient.UpdateIssueComment(ctx,
+			_, updateErr := r.githubClient.UpdateIssueComment(ctx,
 				event.Repository.Owner.Login,
 				event.Repository.Name,
 				int(progressComment.ID),
 				commentBody)
+			if updateErr != nil {
+				log.Printf("Warning: failed to update progress comment to reviewing stage: %v", updateErr)
+			}
 		}
 
 		log.Printf("Sending PR #%d to LLM for analysis", event.Number)
