@@ -112,11 +112,11 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (
 	if r.githubClient != nil {
 		reviewData := &ReviewData{Event: event}
 		reviewProgress = CreateInitialProgress(reviewData)
-		
+
 		// Check for existing progress comment first
-		existingComment, err := r.githubClient.FindProgressComment(ctx, 
-			event.Repository.Owner.Login, 
-			event.Repository.Name, 
+		existingComment, err := r.githubClient.FindProgressComment(ctx,
+			event.Repository.Owner.Login,
+			event.Repository.Name,
 			event.Number)
 		if err != nil {
 			log.Printf("Warning: failed to check for existing progress comment: %v", err)
@@ -266,7 +266,7 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (
 	// Update progress comment with completion status
 	if r.githubClient != nil && progressComment != nil && reviewProgress != nil {
 		UpdateProgressStage(reviewProgress, "completed", "Review completed successfully")
-		
+
 		// Generate summary based on results
 		var summary string
 		if result.CommentsPosted > 0 {
@@ -279,7 +279,7 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (
 			summary = "No issues found"
 		}
 		reviewProgress.Summary = summary
-		
+
 		commentBody := GenerateProgressComment(reviewProgress)
 		_, err := r.githubClient.UpdateIssueComment(ctx,
 			event.Repository.Owner.Login,

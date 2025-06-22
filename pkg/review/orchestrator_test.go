@@ -254,17 +254,17 @@ func (m *mockCodeAnalyzer) ExtractContext(parsedDiff *analyzer.ParsedDiff, conte
 // Mock objects for comment posting tests
 
 type mockGitHubCommentClient struct {
-	createCommentCalls      []createCommentCall
-	shouldFailComment       bool
-	commentError            error
-	getCommentsCalls        []getCommentsCall
-	existingComments        []github.PullRequestComment
-	createIssueCommentCalls []createIssueCommentCall
-	updateIssueCommentCalls []updateIssueCommentCall
+	createCommentCalls       []createCommentCall
+	shouldFailComment        bool
+	commentError             error
+	getCommentsCalls         []getCommentsCall
+	existingComments         []github.PullRequestComment
+	createIssueCommentCalls  []createIssueCommentCall
+	updateIssueCommentCalls  []updateIssueCommentCall
 	findProgressCommentCalls []findProgressCommentCall
-	progressComment         *github.IssueComment
-	shouldFailIssueComment  bool
-	issueCommentError       error
+	progressComment          *github.IssueComment
+	shouldFailIssueComment   bool
+	issueCommentError        error
 }
 
 type createIssueCommentCall struct {
@@ -741,7 +741,7 @@ func TestDefaultReviewOrchestrator_ProgressComments_Success(t *testing.T) {
 		t.Error("expected analyzing update to contain 'analyzing'")
 	}
 
-	// Verify reviewing stage update  
+	// Verify reviewing stage update
 	reviewingUpdate := mockGitHub.updateIssueCommentCalls[1]
 	if !strings.Contains(reviewingUpdate.body, "💬") {
 		t.Error("expected reviewing update to contain speech emoji")

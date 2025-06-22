@@ -139,23 +139,22 @@ var (
 	}
 )
 
-
 func TestGetPullRequestComments_Success(t *testing.T) {
 	response := []PullRequestComment{
 		{
-			ID:     1,
-			Body:   "Test comment 1",
-			Path:   "test.go",
-			Line:   10,
-			User:   User{Login: "reviewer1"},
+			ID:      1,
+			Body:    "Test comment 1",
+			Path:    "test.go",
+			Line:    10,
+			User:    User{Login: "reviewer1"},
 			HTMLURL: "https://github.com/owner/repo/pull/123#issuecomment-1",
 		},
 		{
-			ID:     2,
-			Body:   "Test comment 2",
-			Path:   "main.go",
-			Line:   25,
-			User:   User{Login: "reviewer2"},
+			ID:      2,
+			Body:    "Test comment 2",
+			Path:    "main.go",
+			Line:    25,
+			User:    User{Login: "reviewer2"},
 			HTMLURL: "https://github.com/owner/repo/pull/123#issuecomment-2",
 		},
 	}
@@ -215,7 +214,7 @@ func TestGetPullRequestComments_Error(t *testing.T) {
 		t.Fatal("expected error for 404 response")
 	}
 
-	expectedError := "failed to get pull request comments"
+	expectedError := "failed to get PR comments"
 	if !strings.Contains(err.Error(), expectedError) {
 		t.Errorf("expected error to contain %q, got %q", expectedError, err.Error())
 	}
@@ -329,10 +328,18 @@ func TestCheckoutBranch(t *testing.T) {
 			if command != "git" {
 				return fmt.Errorf("expected git command, got %s", command)
 			}
-			if len(args) < 2 || args[0] != "checkout" {
-				return fmt.Errorf("expected git checkout command, got %v", args)
+			// Allow various git commands that CheckoutBranch might call
+			if len(args) > 0 && (args[0] == "checkout" || args[0] == "remote" || args[0] == "fetch") {
+				return nil
 			}
-			return nil
+			return fmt.Errorf("unexpected git command: %v", args)
+		},
+		executeWithOutputFunc: func(dir, command string, args ...string) ([]byte, error) {
+			// Return a valid GitHub URL for git remote get-url origin
+			if command == "git" && len(args) >= 3 && args[0] == "remote" && args[1] == "get-url" && args[2] == "origin" {
+				return []byte("https://github.com/owner/repo.git\n"), nil
+			}
+			return []byte(""), nil
 		},
 	}
 
@@ -349,8 +356,8 @@ func TestCheckoutBranch(t *testing.T) {
 
 // Mock command executor for testing
 type mockCommandExecutor struct {
-	executeFunc         func(command string, args ...string) error
-	executeInDirFunc    func(dir, command string, args ...string) error
+	executeFunc           func(command string, args ...string) error
+	executeInDirFunc      func(dir, command string, args ...string) error
 	executeWithOutputFunc func(dir, command string, args ...string) ([]byte, error)
 }
 
@@ -425,9 +432,9 @@ index 1234567..abcdefg 100644
 
 func TestCreateIssueComment_Success(t *testing.T) {
 	expectedComment := &IssueComment{
-		ID:   12345,
-		Body: "🔍 Review in progress...",
-		User: User{Login: "review-bot"},
+		ID:      12345,
+		Body:    "🔍 Review in progress...",
+		User:    User{Login: "review-bot"},
 		HTMLURL: "https://github.com/owner/repo/issues/123#issuecomment-12345",
 	}
 
@@ -473,9 +480,9 @@ func TestCreateIssueComment_Success(t *testing.T) {
 
 func TestUpdateIssueComment_Success(t *testing.T) {
 	updatedComment := &IssueComment{
-		ID:   12345,
-		Body: "✅ Review completed - 3 comments posted",
-		User: User{Login: "review-bot"},
+		ID:      12345,
+		Body:    "✅ Review completed - 3 comments posted",
+		User:    User{Login: "review-bot"},
 		HTMLURL: "https://github.com/owner/repo/issues/123#issuecomment-12345",
 	}
 
