@@ -50,6 +50,8 @@ func main() {
 		runInit(os.Args[2:])
 	case "version":
 		runVersion(os.Args[2:])
+	case "action":
+		runAction(os.Args[2:])
 	case "--help", "-h", "help":
 		printUsage()
 	default:
@@ -70,6 +72,7 @@ Commands:
   server      Start webhook server for automated reviews
   init        Create a sample .env file for configuration
   version     Show version information
+  action      Run in GitHub Action mode (internal use)
   help        Show this help message
 
 Use "review-agent <command> --help" for more information about a command.
@@ -460,4 +463,30 @@ func startWebhookServer(config *ServerConfig) error {
 	fmt.Printf("🔍 Health check: http://localhost%s/health\n", addr)
 
 	return http.ListenAndServe(addr, nil)
+}
+
+func runAction(args []string) {
+	// This is a special mode for running inside GitHub Actions
+	// It uses environment variables set by the action wrapper
+	
+	fs := flag.NewFlagSet("action", flag.ExitOnError)
+	
+	fs.Usage = func() {
+		fmt.Print(`Run in GitHub Action mode (internal use)
+
+This command is used internally by the GitHub Action wrapper.
+It reads configuration from environment variables set by action.yml.
+`)
+	}
+	
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
+		os.Exit(1)
+	}
+	
+	// The action entrypoint script calls the review command directly
+	// This is just a placeholder in case we need special action behavior later
+	fmt.Println("Action mode is handled by the entrypoint script")
+	fmt.Println("This command should not be called directly")
+	os.Exit(1)
 }

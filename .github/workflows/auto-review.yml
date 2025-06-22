@@ -1,0 +1,73 @@
+name: Auto Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    # Optionally, you can limit to specific paths
+    # paths:
+    #   - 'src/**'
+    #   - 'pkg/**'
+
+jobs:
+  review:
+    name: Automated Code Review
+    runs-on: ubuntu-latest
+    
+    # Skip if PR has skip-review label
+    if: |
+      !contains(github.event.pull_request.labels.*.name, 'skip-review') &&
+      !contains(github.event.pull_request.labels.*.name, 'wip')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history for better context
+          fetch-depth: 0
+      
+      - name: Run Code Review Agent
+        uses: ./  # Use this repository's action
+        # For external usage, replace with: uses: your-org/review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          # Optionally override default model
+          # claude-model: 'claude-3-7-sonnet-20250109'
+          
+          # Optional: Customize review behavior
+          skip-draft: 'true'
+          skip-labels: 'skip-review,wip,no-review'
+          exclude-paths: 'vendor/**,node_modules/**,*.lock,*.sum,dist/**,build/**'
+          comment-threshold: '0.7'
+          
+          # Optional: Only review specific file types
+          # review-paths: '**/*.go,**/*.js,**/*.ts,**/*.py'
+      
+      - name: Review Summary
+        if: always()
+        run: |
+          echo "Review Status: ${{ steps.review.outputs.review-status }}"
+          echo "Comments Posted: ${{ steps.review.outputs.comments-posted }}"
+          echo "Review URL: ${{ steps.review.outputs.review-url }}"
+
+  # Optional: Post a comment if review is skipped
+  notify-skip:
+    name: Notify Skip
+    runs-on: ubuntu-latest
+    if: |
+      github.event.pull_request.draft == true ||
+      contains(github.event.pull_request.labels.*.name, 'skip-review') ||
+      contains(github.event.pull_request.labels.*.name, 'wip')
+    
+    steps:
+      - name: Post skip comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const reason = context.payload.pull_request.draft ? 'draft PR' : 'skip-review label';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🤖 Code review skipped due to ${reason}.`
+            });

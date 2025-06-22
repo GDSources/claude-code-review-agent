@@ -273,6 +273,150 @@ export WEBHOOK_SECRET="your-webhook-secret-here"
   --port 3000
 ```
 
+## GitHub Action Usage
+
+The review agent is available as a GitHub Action for easy integration into your workflows.
+
+### Quick Start
+
+Add this to `.github/workflows/code-review.yml` in your repository:
+
+```yaml
+name: Automated Code Review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: your-org/review-agent@v1  # Replace with your action path
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+```
+
+### Action Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `github-token` | ✅ | - | GitHub token for API access |
+| `claude-api-key` | ✅ | - | Claude API key for AI reviews |
+| `claude-model` | ❌ | `claude-sonnet-4-20250514` | Claude model to use |
+| `pr-number` | ❌ | Auto-detected | Pull request number to review |
+| `repository` | ❌ | Auto-detected | Repository in format owner/repo |
+| `skip-draft` | ❌ | `true` | Skip review for draft PRs |
+| `skip-labels` | ❌ | `skip-review,wip` | Labels that skip review |
+| `review-paths` | ❌ | All files | Paths to review (e.g., `src/**/*.go`) |
+| `exclude-paths` | ❌ | `vendor/**,node_modules/**` | Paths to exclude |
+| `comment-threshold` | ❌ | `0.7` | Minimum confidence for comments |
+
+### Action Outputs
+
+| Output | Description |
+|--------|-------------|
+| `review-status` | Status of the review (success, skipped, failed) |
+| `review-url` | URL to the pull request review |
+| `comments-posted` | Number of review comments posted |
+
+### Example Workflows
+
+#### Advanced Configuration
+
+```yaml
+name: Code Review with Custom Settings
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'pkg/**'
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: your-org/review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          claude-model: 'claude-3-7-sonnet-20250109'
+          skip-draft: 'false'  # Review draft PRs
+          review-paths: 'src/**,pkg/**'
+          exclude-paths: 'vendor/**,**/*_test.go'
+          comment-threshold: '0.8'
+```
+
+#### Manual Review Trigger
+
+```yaml
+name: Manual Code Review
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: 'PR number to review'
+        required: true
+        type: number
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: your-org/review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          pr-number: ${{ inputs.pr-number }}
+```
+
+#### Comment-Triggered Review
+
+```yaml
+name: Review on Comment
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  review:
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/review')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: your-org/review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+```
+
+### Comment Commands
+
+When using the comment-triggered workflow, you can use these commands in PR comments:
+
+- `/review` - Trigger a basic review
+- `/review model:claude-3-7-haiku-20250109` - Use a specific model
+- `/review paths:src/**,pkg/**` - Review specific paths only
+- `/review --force` - Force review even for draft PRs
+
+### Setting Up the Action
+
+1. **Add Secrets**: In your repository settings, add the `CLAUDE_API_KEY` secret
+2. **Create Workflow**: Add one of the example workflows above to `.github/workflows/`
+3. **Customize**: Adjust the configuration to match your needs
+
+### Security Considerations
+
+- Never commit API keys directly to your repository
+- Use GitHub Secrets for sensitive values
+- The `GITHUB_TOKEN` is automatically provided by GitHub Actions
+- Review the action's permissions in your workflow
+
 ## GitHub Integration
 
 ### Setting Up Webhooks

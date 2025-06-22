@@ -36,6 +36,13 @@ WORKDIR /app
 # Copy binary from builder stage
 COPY --from=builder /app/review-agent .
 
+# Copy scripts for GitHub Action
+COPY scripts/action-entrypoint.sh ./scripts/
+RUN chmod +x ./scripts/action-entrypoint.sh
+
+# Install jq for parsing GitHub event JSON in action mode
+RUN apk add --no-cache jq
+
 # Create directory for workspace operations
 RUN mkdir -p /tmp/workspaces && chown -R appuser:appgroup /tmp/workspaces
 
