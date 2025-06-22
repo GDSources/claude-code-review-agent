@@ -3,6 +3,7 @@ package review
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/GDSources/claude-code-review-agent/pkg/analyzer"
@@ -253,11 +254,37 @@ func (m *mockCodeAnalyzer) ExtractContext(parsedDiff *analyzer.ParsedDiff, conte
 // Mock objects for comment posting tests
 
 type mockGitHubCommentClient struct {
-	createCommentCalls []createCommentCall
-	shouldFailComment  bool
-	commentError       error
-	getCommentsCalls   []getCommentsCall
-	existingComments   []github.PullRequestComment
+	createCommentCalls      []createCommentCall
+	shouldFailComment       bool
+	commentError            error
+	getCommentsCalls        []getCommentsCall
+	existingComments        []github.PullRequestComment
+	createIssueCommentCalls []createIssueCommentCall
+	updateIssueCommentCalls []updateIssueCommentCall
+	findProgressCommentCalls []findProgressCommentCall
+	progressComment         *github.IssueComment
+	shouldFailIssueComment  bool
+	issueCommentError       error
+}
+
+type createIssueCommentCall struct {
+	owner       string
+	repo        string
+	issueNumber int
+	body        string
+}
+
+type updateIssueCommentCall struct {
+	owner     string
+	repo      string
+	commentID int
+	body      string
+}
+
+type findProgressCommentCall struct {
+	owner       string
+	repo        string
+	issueNumber int
 }
 
 type createCommentCall struct {
@@ -322,6 +349,62 @@ func (m *mockGitHubCommentClient) GetPullRequestComments(ctx context.Context, ow
 	})
 
 	return m.existingComments, nil
+}
+
+func (m *mockGitHubCommentClient) CreateIssueComment(ctx context.Context, owner, repo string, issueNumber int, body string) (*github.IssueComment, error) {
+	m.createIssueCommentCalls = append(m.createIssueCommentCalls, createIssueCommentCall{
+		owner:       owner,
+		repo:        repo,
+		issueNumber: issueNumber,
+		body:        body,
+	})
+
+	if m.shouldFailIssueComment {
+		return nil, m.issueCommentError
+	}
+
+	comment := &github.IssueComment{
+		ID:   int64(len(m.createIssueCommentCalls)),
+		Body: body,
+		User: github.User{Login: "review-agent"},
+	}
+	m.progressComment = comment
+	return comment, nil
+}
+
+func (m *mockGitHubCommentClient) UpdateIssueComment(ctx context.Context, owner, repo string, commentID int, body string) (*github.IssueComment, error) {
+	m.updateIssueCommentCalls = append(m.updateIssueCommentCalls, updateIssueCommentCall{
+		owner:     owner,
+		repo:      repo,
+		commentID: commentID,
+		body:      body,
+	})
+
+	if m.shouldFailIssueComment {
+		return nil, m.issueCommentError
+	}
+
+	comment := &github.IssueComment{
+		ID:   int64(commentID),
+		Body: body,
+		User: github.User{Login: "review-agent"},
+	}
+	m.progressComment = comment
+	return comment, nil
+}
+
+func (m *mockGitHubCommentClient) FindProgressComment(ctx context.Context, owner, repo string, issueNumber int) (*github.IssueComment, error) {
+	m.findProgressCommentCalls = append(m.findProgressCommentCalls, findProgressCommentCall{
+		owner:       owner,
+		repo:        repo,
+		issueNumber: issueNumber,
+	})
+
+	if m.shouldFailIssueComment {
+		return nil, m.issueCommentError
+	}
+
+	return m.progressComment, nil
 }
 
 type mockLLMClientWithComments struct {
@@ -550,5 +633,303 @@ func TestDefaultReviewOrchestrator_WithoutGitHubClient(t *testing.T) {
 	}
 	if result.CommentsPosted != 0 {
 		t.Errorf("expected 0 comments posted without GitHub client, got %d", result.CommentsPosted)
+	}
+}
+
+// NEW FAILING TESTS FOR PROGRESS COMMENTS (TDD APPROACH)
+
+func TestDefaultReviewOrchestrator_ProgressComments_Success(t *testing.T) {
+	// Create mock LLM client with review comments
+	mockLLM := &mockLLMClientWithComments{
+		reviewResponse: &llm.ReviewResponse{
+			Comments: []llm.ReviewComment{
+				{
+					Filename:   "main.go",
+					LineNumber: 15,
+					Comment:    "Consider adding error handling",
+					Severity:   llm.SeverityMajor,
+					Type:       llm.CommentTypeIssue,
+				},
+			},
+			Summary:     "Overall good code quality",
+			ModelUsed:   "test-model",
+			TokensUsed:  llm.TokenUsage{TotalTokens: 100},
+			ReviewID:    "test-review-123",
+			GeneratedAt: "2023-01-01T12:00:00Z",
+		},
+	}
+
+	// Create mock GitHub comment client
+	mockGitHub := &mockGitHubCommentClient{}
+
+	// Create other mocks
+	mockWM := &mockWorkspaceManager{}
+	mockDF := &mockDiffFetcher{
+		diffResult: &github.DiffResult{
+			RawDiff:    "test diff",
+			TotalFiles: 1,
+		},
+	}
+	mockCA := &mockCodeAnalyzer{
+		parsedDiff: &analyzer.ParsedDiff{
+			TotalFiles: 1,
+		},
+		contextualDiff: &analyzer.ContextualDiff{
+			ParsedDiff: &analyzer.ParsedDiff{TotalFiles: 1},
+		},
+	}
+
+	// Create orchestrator with comment posting enabled
+	orchestrator := &DefaultReviewOrchestrator{
+		workspaceManager: mockWM,
+		diffFetcher:      mockDF,
+		codeAnalyzer:     mockCA,
+		llmClient:        mockLLM,
+		githubClient:     mockGitHub,
+	}
+
+	// Create test event
+	event := createTestPullRequestEvent()
+
+	// Execute the review
+	result, err := orchestrator.HandlePullRequest(event)
+	if err != nil {
+		t.Fatalf("HandlePullRequest failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
+	}
+
+	// Verify progress comment was created initially
+	if len(mockGitHub.createIssueCommentCalls) < 1 {
+		t.Error("expected at least 1 progress comment to be created")
+	}
+
+	// Verify initial progress comment content
+	initialCall := mockGitHub.createIssueCommentCalls[0]
+	if initialCall.owner != "company" {
+		t.Errorf("expected owner 'company', got '%s'", initialCall.owner)
+	}
+	if initialCall.repo != "test-repo" {
+		t.Errorf("expected repo 'test-repo', got '%s'", initialCall.repo)
+	}
+	if initialCall.issueNumber != 42 {
+		t.Errorf("expected issue number 42, got %d", initialCall.issueNumber)
+	}
+	if !strings.Contains(initialCall.body, "🔍") {
+		t.Error("expected initial progress comment to contain search emoji")
+	}
+	if !strings.Contains(initialCall.body, "review-agent:progress-comment") {
+		t.Error("expected initial progress comment to contain progress marker")
+	}
+
+	// Verify progress comment was updated during analysis
+	if len(mockGitHub.updateIssueCommentCalls) < 2 {
+		t.Error("expected at least 2 progress comment updates (analyzing, reviewing)")
+	}
+
+	// Verify analyzing stage update
+	analyzingUpdate := mockGitHub.updateIssueCommentCalls[0]
+	if !strings.Contains(analyzingUpdate.body, "📊") {
+		t.Error("expected analyzing update to contain chart emoji")
+	}
+	if !strings.Contains(analyzingUpdate.body, "analyzing") {
+		t.Error("expected analyzing update to contain 'analyzing'")
+	}
+
+	// Verify reviewing stage update  
+	reviewingUpdate := mockGitHub.updateIssueCommentCalls[1]
+	if !strings.Contains(reviewingUpdate.body, "💬") {
+		t.Error("expected reviewing update to contain speech emoji")
+	}
+	if !strings.Contains(reviewingUpdate.body, "reviewing") {
+		t.Error("expected reviewing update to contain 'reviewing'")
+	}
+
+	// Verify final completion update
+	if len(mockGitHub.updateIssueCommentCalls) < 3 {
+		t.Error("expected final completion update")
+	}
+	completionUpdate := mockGitHub.updateIssueCommentCalls[2]
+	if !strings.Contains(completionUpdate.body, "✅") {
+		t.Error("expected completion update to contain check mark emoji")
+	}
+	if !strings.Contains(completionUpdate.body, "completed") {
+		t.Error("expected completion update to contain 'completed'")
+	}
+	if !strings.Contains(completionUpdate.body, "1 comment") {
+		t.Error("expected completion update to contain comment count summary")
+	}
+}
+
+func TestDefaultReviewOrchestrator_ProgressComments_UpdateExisting(t *testing.T) {
+	// Create mock LLM client
+	mockLLM := &mockLLMClientWithComments{
+		reviewResponse: &llm.ReviewResponse{
+			Comments: []llm.ReviewComment{},
+			Summary:  "No issues found",
+		},
+	}
+
+	// Create mock GitHub client with existing progress comment
+	existingComment := &github.IssueComment{
+		ID:   999,
+		Body: "🔍 **Review Progress**\n\n**Stage:** initializing\n<!-- review-agent:progress-comment -->",
+		User: github.User{Login: "review-agent"},
+	}
+	mockGitHub := &mockGitHubCommentClient{
+		progressComment: existingComment,
+	}
+
+	// Create other mocks
+	mockWM := &mockWorkspaceManager{}
+	mockDF := &mockDiffFetcher{
+		diffResult: &github.DiffResult{RawDiff: "test", TotalFiles: 1},
+	}
+	mockCA := &mockCodeAnalyzer{
+		contextualDiff: &analyzer.ContextualDiff{
+			ParsedDiff: &analyzer.ParsedDiff{TotalFiles: 1},
+		},
+	}
+
+	// Create orchestrator
+	orchestrator := &DefaultReviewOrchestrator{
+		workspaceManager: mockWM,
+		diffFetcher:      mockDF,
+		codeAnalyzer:     mockCA,
+		llmClient:        mockLLM,
+		githubClient:     mockGitHub,
+	}
+
+	// Execute the review
+	result, err := orchestrator.HandlePullRequest(createTestPullRequestEvent())
+	if err != nil {
+		t.Fatalf("HandlePullRequest failed: %v", err)
+	}
+
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
+	}
+
+	// Verify existing progress comment was found
+	if len(mockGitHub.findProgressCommentCalls) < 1 {
+		t.Error("expected progress comment to be searched for")
+	}
+
+	// Should update existing comment instead of creating new one
+	if len(mockGitHub.createIssueCommentCalls) > 0 {
+		t.Error("expected no new progress comment to be created when existing one found")
+	}
+
+	// Verify updates were made to existing comment
+	if len(mockGitHub.updateIssueCommentCalls) < 3 {
+		t.Error("expected at least 3 updates to existing progress comment")
+	}
+
+	// Verify final update shows completion
+	finalUpdate := mockGitHub.updateIssueCommentCalls[len(mockGitHub.updateIssueCommentCalls)-1]
+	if finalUpdate.commentID != 999 {
+		t.Errorf("expected update to comment ID 999, got %d", finalUpdate.commentID)
+	}
+	if !strings.Contains(finalUpdate.body, "completed") {
+		t.Error("expected final update to show completion")
+	}
+}
+
+func TestDefaultReviewOrchestrator_ProgressComments_Failure(t *testing.T) {
+	// Create mock that fails during diff fetching
+	mockWM := &mockWorkspaceManager{}
+	mockDF := &mockDiffFetcher{
+		shouldFail: true,
+		error:      fmt.Errorf("API rate limit exceeded"),
+	}
+	mockCA := &mockCodeAnalyzer{}
+	mockLLM := &mockLLMClientWithComments{}
+	mockGitHub := &mockGitHubCommentClient{}
+
+	// Create orchestrator
+	orchestrator := &DefaultReviewOrchestrator{
+		workspaceManager: mockWM,
+		diffFetcher:      mockDF,
+		codeAnalyzer:     mockCA,
+		llmClient:        mockLLM,
+		githubClient:     mockGitHub,
+	}
+
+	// Execute the review
+	result, err := orchestrator.HandlePullRequest(createTestPullRequestEvent())
+
+	// Should not fail completely even if analysis fails
+	if err != nil {
+		t.Errorf("HandlePullRequest should not fail completely, got: %v", err)
+	}
+
+	if result.Status != "success" {
+		t.Errorf("expected status 'success' even with analysis failure, got '%s'", result.Status)
+	}
+
+	// Verify progress comment was still created
+	if len(mockGitHub.createIssueCommentCalls) < 1 {
+		t.Error("expected progress comment to be created even when analysis fails")
+	}
+
+	// Should have at least one update showing the failure was handled gracefully
+	if len(mockGitHub.updateIssueCommentCalls) < 1 {
+		t.Error("expected progress comment to be updated even when analysis fails")
+	}
+}
+
+func TestDefaultReviewOrchestrator_ProgressComments_GitHubFailure(t *testing.T) {
+	// Create working mocks
+	mockLLM := &mockLLMClientWithComments{
+		reviewResponse: &llm.ReviewResponse{
+			Comments: []llm.ReviewComment{},
+			Summary:  "All good",
+		},
+	}
+	mockWM := &mockWorkspaceManager{}
+	mockDF := &mockDiffFetcher{
+		diffResult: &github.DiffResult{RawDiff: "test", TotalFiles: 1},
+	}
+	mockCA := &mockCodeAnalyzer{
+		contextualDiff: &analyzer.ContextualDiff{
+			ParsedDiff: &analyzer.ParsedDiff{TotalFiles: 1},
+		},
+	}
+
+	// Create GitHub client that fails issue comment operations
+	mockGitHub := &mockGitHubCommentClient{
+		shouldFailIssueComment: true,
+		issueCommentError:      fmt.Errorf("GitHub API error"),
+	}
+
+	// Create orchestrator
+	orchestrator := &DefaultReviewOrchestrator{
+		workspaceManager: mockWM,
+		diffFetcher:      mockDF,
+		codeAnalyzer:     mockCA,
+		llmClient:        mockLLM,
+		githubClient:     mockGitHub,
+	}
+
+	// Execute the review
+	result, err := orchestrator.HandlePullRequest(createTestPullRequestEvent())
+
+	// Should not fail even if progress comments fail
+	if err != nil {
+		t.Errorf("HandlePullRequest should not fail when progress comments fail, got: %v", err)
+	}
+
+	if result.Status != "success" {
+		t.Errorf("expected status 'success' even with progress comment failure, got '%s'", result.Status)
+	}
+
+	// Verify attempts were made to create/update progress comments
+	if len(mockGitHub.createIssueCommentCalls) < 1 {
+		t.Error("expected attempt to create progress comment")
 	}
 }

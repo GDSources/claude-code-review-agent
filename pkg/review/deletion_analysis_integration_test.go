@@ -494,3 +494,23 @@ func (m *integrationMockGitHubCommentClient) CreatePullRequestComments(ctx conte
 func (m *integrationMockGitHubCommentClient) GetPullRequestComments(ctx context.Context, owner, repo string, prNumber int) ([]github.PullRequestComment, error) {
 	return []github.PullRequestComment{}, nil
 }
+
+func (m *integrationMockGitHubCommentClient) CreateIssueComment(ctx context.Context, owner, repo string, issueNumber int, body string) (*github.IssueComment, error) {
+	return &github.IssueComment{
+		ID:   int64(issueNumber),
+		Body: body,
+		User: github.User{Login: "review-agent"},
+	}, nil
+}
+
+func (m *integrationMockGitHubCommentClient) UpdateIssueComment(ctx context.Context, owner, repo string, commentID int, body string) (*github.IssueComment, error) {
+	return &github.IssueComment{
+		ID:   int64(commentID),
+		Body: body,
+		User: github.User{Login: "review-agent"},
+	}, nil
+}
+
+func (m *integrationMockGitHubCommentClient) FindProgressComment(ctx context.Context, owner, repo string, issueNumber int) (*github.IssueComment, error) {
+	return nil, nil // No existing progress comment found
+}
