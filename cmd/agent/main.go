@@ -516,9 +516,9 @@ func startWebhookServer(config *ServerConfig) error {
 func runAction(args []string) {
 	// This is a special mode for running inside GitHub Actions
 	// It uses environment variables set by the action wrapper
-	
+
 	fs := flag.NewFlagSet("action", flag.ExitOnError)
-	
+
 	fs.Usage = func() {
 		fmt.Print(`Run in GitHub Action mode (internal use)
 
@@ -526,12 +526,12 @@ This command is used internally by the GitHub Action wrapper.
 It reads configuration from environment variables set by action.yml.
 `)
 	}
-	
+
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	// The action entrypoint script calls the review command directly
 	// This is just a placeholder in case we need special action behavior later
 	fmt.Println("Action mode is handled by the entrypoint script")

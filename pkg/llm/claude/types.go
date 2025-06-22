@@ -74,8 +74,8 @@ type ResourceLimits struct {
 // DefaultResourceLimits provides sensible defaults for resource limits
 var DefaultResourceLimits = ResourceLimits{
 	MaxCodebaseSize:   50 * 1024 * 1024, // 50MB
-	MaxFileCount:      1000,              // 1000 files max
-	MaxPromptLength:   500000,            // 500KB prompt max
-	MaxResponseLength: 100000,            // 100KB response max
-	MaxContextLines:   50,                // 50 lines context per file
+	MaxFileCount:      1000,             // 1000 files max
+	MaxPromptLength:   500000,           // 500KB prompt max
+	MaxResponseLength: 100000,           // 100KB response max
+	MaxContextLines:   50,               // 50 lines context per file
 }

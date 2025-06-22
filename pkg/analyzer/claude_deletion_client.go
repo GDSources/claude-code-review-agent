@@ -135,10 +135,10 @@ func (c *ClaudeDeletionClient) AnalyzeDeletions(ctx context.Context, aiContext *
 	if aiContext.DeletionContext == "" {
 		return nil, fmt.Errorf("deletion context cannot be empty - ensure deleted content has been extracted")
 	}
-	
+
 	// Validate context sizes for memory safety
 	if len(aiContext.CodebaseContext) > 1000000 { // 1MB limit
-		return nil, fmt.Errorf("codebase context too large (%d bytes) - consider processing smaller chunks", 
+		return nil, fmt.Errorf("codebase context too large (%d bytes) - consider processing smaller chunks",
 			len(aiContext.CodebaseContext))
 	}
 

@@ -28,7 +28,7 @@ func TestLoadEnvConfig(t *testing.T) {
 			name:   "load from environment variables",
 			config: &Config{},
 			envVars: map[string]string{
-				"GH_TOKEN":   "env-github-token",
+				"GH_TOKEN":       "env-github-token",
 				"CLAUDE_API_KEY": "env-claude-key",
 			},
 			expectedGitHub: "env-github-token",
@@ -41,7 +41,7 @@ func TestLoadEnvConfig(t *testing.T) {
 				ClaudeAPIKey: "flag-claude-key",
 			},
 			envVars: map[string]string{
-				"GH_TOKEN":   "env-github-token",
+				"GH_TOKEN":       "env-github-token",
 				"CLAUDE_API_KEY": "env-claude-key",
 			},
 			expectedGitHub: "flag-github-token",

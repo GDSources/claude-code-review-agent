@@ -74,7 +74,7 @@ EQUALS_IN_VALUE=key=value=more
 
 	// Save original env vars
 	originalVars := map[string]string{
-		"GH_TOKEN":    os.Getenv("GH_TOKEN"),
+		"GH_TOKEN":        os.Getenv("GH_TOKEN"),
 		"CLAUDE_API_KEY":  os.Getenv("CLAUDE_API_KEY"),
 		"QUOTED_VALUE":    os.Getenv("QUOTED_VALUE"),
 		"SINGLE_QUOTED":   os.Getenv("SINGLE_QUOTED"),
