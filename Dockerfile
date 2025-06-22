@@ -23,8 +23,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o review-agent cmd/
 # Runtime stage
 FROM alpine:latest
 
-# Install git (needed for repository cloning) and ca-certificates (for HTTPS)
-RUN apk add --no-cache git ca-certificates tzdata
+# Install git (needed for repository cloning), ca-certificates (for HTTPS), and bash (for GitHub Actions)
+RUN apk add --no-cache git ca-certificates tzdata bash
 
 # Create non-root user
 RUN addgroup -g 1001 -S appgroup && \
