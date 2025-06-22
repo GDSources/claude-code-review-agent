@@ -128,6 +128,7 @@ func TestReviewOrchestrator_DeletionAnalysisIntegration(t *testing.T) {
 	event := &PullRequestEvent{
 		Number: 123,
 		PullRequest: PullRequest{
+			ID:    456789,
 			Title: "Remove deprecated utility functions",
 			User: User{
 				Login: "developer",
@@ -150,9 +151,16 @@ func TestReviewOrchestrator_DeletionAnalysisIntegration(t *testing.T) {
 	}
 
 	// Handle the PR (this should trigger deletion analysis)
-	err := orchestrator.HandlePullRequest(event)
+	result, err := orchestrator.HandlePullRequest(event)
 	if err != nil {
 		t.Fatalf("HandlePullRequest failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
 	}
 
 	// Verify that deletion analysis was performed
@@ -235,9 +243,16 @@ func TestReviewOrchestrator_DeletionAnalysisWithActualComponents(t *testing.T) {
 	}
 
 	// Handle the PR
-	err := orchestrator.HandlePullRequest(event)
+	result, err := orchestrator.HandlePullRequest(event)
 	if err != nil {
 		t.Fatalf("HandlePullRequest with real components failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
 	}
 
 	t.Logf("Real deletion analysis integration test completed")
@@ -285,9 +300,16 @@ func TestReviewOrchestrator_DeletionAnalysisDisabled(t *testing.T) {
 	}
 
 	// This should work fine without deletion analysis
-	err := orchestrator.HandlePullRequest(event)
+	result, err := orchestrator.HandlePullRequest(event)
 	if err != nil {
 		t.Fatalf("HandlePullRequest without deletion analysis failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
 	}
 
 	t.Logf("PR review without deletion analysis completed successfully")

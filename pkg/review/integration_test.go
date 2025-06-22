@@ -84,7 +84,7 @@ func TestReviewOrchestrator_Integration(t *testing.T) {
 			event := createTestEvent()
 
 			// Execute the review
-			err := orchestrator.HandlePullRequest(event)
+			result, err := orchestrator.HandlePullRequest(event)
 
 			// Check error expectations
 			if tt.expectError && err == nil {
@@ -92,6 +92,18 @@ func TestReviewOrchestrator_Integration(t *testing.T) {
 			}
 			if !tt.expectError && err != nil {
 				t.Errorf("unexpected error: %v", err)
+			}
+
+			// Check result expectations
+			if result == nil {
+				t.Error("expected result to be returned")
+			} else {
+				if !tt.expectError && result.Status != "success" {
+					t.Errorf("expected status 'success', got '%s'", result.Status)
+				}
+				if tt.expectError && result.Status != "failed" {
+					t.Errorf("expected status 'failed', got '%s'", result.Status)
+				}
 			}
 			if tt.errorContains != "" && (err == nil || err.Error() == "") {
 				t.Errorf("expected error to contain '%s', got: %v", tt.errorContains, err)
@@ -223,10 +235,16 @@ func TestReviewOrchestrator_ErrorHandling(t *testing.T) {
 		orchestrator := NewDefaultReviewOrchestratorLegacy(workspaceManager)
 
 		event := createTestEvent()
-		err := orchestrator.HandlePullRequest(event)
+		result, err := orchestrator.HandlePullRequest(event)
 
 		if err == nil {
 			t.Error("expected error when workspace creation fails")
+		}
+
+		if result == nil {
+			t.Error("expected result to be returned even on error")
+		} else if result.Status != "failed" {
+			t.Errorf("expected status 'failed', got '%s'", result.Status)
 		}
 
 		// Verify no temp directories left behind even when clone fails

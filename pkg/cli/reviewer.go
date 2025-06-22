@@ -81,7 +81,12 @@ func (r *PRReviewer) ReviewPR(owner, repo string, prNumber int) (*review.ReviewR
 	// Fetch PR data from GitHub API
 	prEvent, err := r.fetchPREvent(owner, repo, prNumber)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch PR data: %w", err)
+		failedResult := &review.ReviewResult{
+			CommentsPosted: 0,
+			Status:         "failed",
+			Summary:        "Failed to fetch PR data",
+		}
+		return failedResult, fmt.Errorf("failed to fetch PR data: %w", err)
 	}
 
 	// Execute review using orchestrator

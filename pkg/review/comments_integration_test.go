@@ -83,6 +83,7 @@ func TestCommentPostingWorkflow_EndToEnd(t *testing.T) {
 		Action: "opened",
 		Number: 123,
 		PullRequest: PullRequest{
+			ID:     456789,
 			Number: 123,
 			Title:  "Test PR with comments",
 			Head: Branch{
@@ -106,9 +107,16 @@ func TestCommentPostingWorkflow_EndToEnd(t *testing.T) {
 	}
 
 	// Execute the review
-	err := orchestrator.HandlePullRequest(event)
+	result, err := orchestrator.HandlePullRequest(event)
 	if err != nil {
 		t.Fatalf("HandlePullRequest failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
 	}
 
 	// Verify that only valid line comments were posted (skipping line 0)
@@ -190,9 +198,16 @@ func TestCommentPostingWorkflow_PartialFailure(t *testing.T) {
 	event := createTestPullRequestEvent()
 
 	// Should not fail even if comment posting fails
-	err := orchestrator.HandlePullRequest(event)
+	result, err := orchestrator.HandlePullRequest(event)
 	if err != nil {
 		t.Errorf("HandlePullRequest should not fail when comment posting fails, got: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
 	}
 
 	// Verify comment posting was attempted
@@ -230,9 +245,19 @@ func TestCommentPostingWorkflow_NoLLMComments(t *testing.T) {
 	event := createTestPullRequestEvent()
 
 	// Should succeed without posting any comments
-	err := orchestrator.HandlePullRequest(event)
+	result, err := orchestrator.HandlePullRequest(event)
 	if err != nil {
 		t.Errorf("HandlePullRequest should succeed with no comments, got: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected result to be returned")
+	}
+	if result.Status != "success" {
+		t.Errorf("expected status 'success', got '%s'", result.Status)
+	}
+	if result.CommentsPosted != 0 {
+		t.Errorf("expected 0 comments posted, got %d", result.CommentsPosted)
 	}
 
 	// Verify no comment posting was attempted

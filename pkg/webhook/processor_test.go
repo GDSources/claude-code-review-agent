@@ -14,13 +14,13 @@ type mockReviewOrchestrator struct {
 	processedEvents int
 }
 
-func (m *mockReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) error {
+func (m *mockReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (*ReviewResult, error) {
 	m.receivedEvents = append(m.receivedEvents, event)
 	m.processedEvents++
 	if m.shouldFail {
-		return m.error
+		return &ReviewResult{CommentsPosted: 0, Status: "failed"}, m.error
 	}
-	return nil
+	return &ReviewResult{CommentsPosted: 0, Status: "success"}, nil
 }
 
 func TestGitHubEventProcessor_ProcessPullRequest(t *testing.T) {
