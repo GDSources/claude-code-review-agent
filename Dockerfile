@@ -37,7 +37,7 @@ WORKDIR /app
 COPY --from=builder /app/review-agent .
 
 # Copy scripts for GitHub Action
-COPY scripts/action-entrypoint.sh ./scripts/
+COPY --from=builder /app/scripts/action-entrypoint.sh ./scripts/
 RUN chmod +x ./scripts/action-entrypoint.sh
 
 # Install jq for parsing GitHub event JSON in action mode

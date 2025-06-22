@@ -77,21 +77,22 @@ func NewPRReviewer(config *ReviewConfig) *PRReviewer {
 	}
 }
 
-func (r *PRReviewer) ReviewPR(owner, repo string, prNumber int) error {
+func (r *PRReviewer) ReviewPR(owner, repo string, prNumber int) (*review.ReviewResult, error) {
 	// Fetch PR data from GitHub API
 	prEvent, err := r.fetchPREvent(owner, repo, prNumber)
 	if err != nil {
-		return fmt.Errorf("failed to fetch PR data: %w", err)
+		return nil, fmt.Errorf("failed to fetch PR data: %w", err)
 	}
 
 	// Execute review using orchestrator
-	if err := r.orchestrator.HandlePullRequest(prEvent); err != nil {
-		return fmt.Errorf("review execution failed: %w", err)
+	result, err := r.orchestrator.HandlePullRequest(prEvent)
+	if err != nil {
+		return result, fmt.Errorf("review execution failed: %w", err)
 	}
 
 	fmt.Printf("✓ Review completed successfully for PR #%d\n", prNumber)
 
-	return nil
+	return result, nil
 }
 
 func (r *PRReviewer) fetchPREvent(owner, repo string, prNumber int) (*webhook.PullRequestEvent, error) {

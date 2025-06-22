@@ -94,28 +94,47 @@ if [ "$RUNNER_DEBUG" = "1" ]; then
     echo "Full command: $REVIEW_CMD"
 fi
 
-# Run the review
+# Run the review and capture output
 echo "🚀 Running code review..."
 set +e  # Don't exit on error so we can capture the exit code
-$REVIEW_CMD
+REVIEW_OUTPUT=$($REVIEW_CMD 2>&1)
 REVIEW_EXIT_CODE=$?
 set -e
 
-# Set outputs based on exit code
+# Parse review results from output
+COMMENTS_POSTED=0
 if [ $REVIEW_EXIT_CODE -eq 0 ]; then
     echo "✅ Review completed successfully"
     echo "review-status=success" >> $GITHUB_OUTPUT
+    
+    # Parse JSON output from the review command
+    REVIEW_JSON=$(echo "$REVIEW_OUTPUT" | grep "REVIEW_RESULT_JSON:" | sed 's/REVIEW_RESULT_JSON://')
+    if [ -n "$REVIEW_JSON" ]; then
+        # Extract comments_posted from JSON using jq if available, otherwise use grep/sed
+        if command -v jq >/dev/null 2>&1; then
+            COMMENTS_POSTED=$(echo "$REVIEW_JSON" | jq -r '.comments_posted // 0')
+        else
+            # Fallback parsing without jq
+            COMMENTS_POSTED=$(echo "$REVIEW_JSON" | sed -n 's/.*"comments_posted":\([0-9]*\).*/\1/p')
+            # If no match found, default to 0
+            if [ -z "$COMMENTS_POSTED" ]; then
+                COMMENTS_POSTED=0
+            fi
+        fi
+    fi
     
     # Try to get the PR URL
     if [ -n "$GITHUB_SERVER_URL" ] && [ -n "$GITHUB_REPOSITORY" ]; then
         echo "review-url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${PR_NUMBER}" >> $GITHUB_OUTPUT
     fi
     
-    # TODO: Parse actual comment count from review output
-    echo "comments-posted=0" >> $GITHUB_OUTPUT
+    echo "comments-posted=${COMMENTS_POSTED}" >> $GITHUB_OUTPUT
+    echo "📊 Posted ${COMMENTS_POSTED} review comments"
 else
     echo "❌ Review failed with exit code: $REVIEW_EXIT_CODE"
     echo "review-status=failed" >> $GITHUB_OUTPUT
     echo "comments-posted=0" >> $GITHUB_OUTPUT
+    # Still output the error for debugging
+    echo "$REVIEW_OUTPUT"
     exit $REVIEW_EXIT_CODE
 fi

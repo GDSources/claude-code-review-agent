@@ -6,7 +6,14 @@ import (
 )
 
 type ReviewOrchestrator interface {
-	HandlePullRequest(event *PullRequestEvent) error
+	HandlePullRequest(event *PullRequestEvent) (*ReviewResult, error)
+}
+
+// ReviewResult contains the outcome of a review operation
+type ReviewResult struct {
+	CommentsPosted int    `json:"comments_posted"`
+	Status         string `json:"status"`
+	Summary        string `json:"summary,omitempty"`
 }
 
 type GitHubEventProcessor struct {
@@ -77,7 +84,8 @@ func (p *GitHubEventProcessor) processPullRequest(payload []byte) error {
 		return nil
 	}
 
-	if err := p.orchestrator.HandlePullRequest(&event); err != nil {
+	_, err := p.orchestrator.HandlePullRequest(&event)
+	if err != nil {
 		return fmt.Errorf("failed to handle pull request event: %w", err)
 	}
 

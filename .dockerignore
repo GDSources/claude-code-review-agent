@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.example
+
+# Build artifacts
+bin/
+tmp/
+*.log
+
+# Test artifacts
+coverage.out
+coverage.html
+testdata/
+
+# Development files
+.air.toml
+Dockerfile.dev
+docker-compose.yml
+
+# Documentation
+*.md
+docs/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Dependencies (will be downloaded in container)
+vendor/

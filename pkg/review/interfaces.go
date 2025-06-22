@@ -20,7 +20,14 @@ type FileSystemManager interface {
 }
 
 type ReviewOrchestrator interface {
-	HandlePullRequest(event *PullRequestEvent) error
+	HandlePullRequest(event *PullRequestEvent) (*ReviewResult, error)
+}
+
+// ReviewResult contains the outcome of a review operation
+type ReviewResult struct {
+	CommentsPosted int    `json:"comments_posted"`
+	Status         string `json:"status"`
+	Summary        string `json:"summary,omitempty"`
 }
 
 type PullRequestEvent = webhook.PullRequestEvent
