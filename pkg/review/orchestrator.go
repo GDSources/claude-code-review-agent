@@ -16,6 +16,9 @@ type GitHubCommentClient interface {
 	CreatePullRequestComment(ctx context.Context, owner, repo string, prNumber int, comment github.CreatePullRequestCommentRequest) (*github.PullRequestComment, error)
 	CreatePullRequestComments(ctx context.Context, owner, repo string, prNumber int, comments []github.CreatePullRequestCommentRequest) (*github.CommentPostingResult, error)
 	GetPullRequestComments(ctx context.Context, owner, repo string, prNumber int) ([]github.PullRequestComment, error)
+	CreateIssueComment(ctx context.Context, owner, repo string, issueNumber int, body string) (*github.IssueComment, error)
+	UpdateIssueComment(ctx context.Context, owner, repo string, commentID int, body string) (*github.IssueComment, error)
+	FindProgressComment(ctx context.Context, owner, repo string, issueNumber int) (*github.IssueComment, error)
 }
 
 type DefaultReviewOrchestrator struct {
@@ -103,8 +106,66 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (
 		Summary:        "",
 	}
 
+	// Initialize progress tracking if GitHub client is available
+	var progressComment *github.IssueComment
+	var reviewProgress *ReviewProgress
+	if r.githubClient != nil {
+		reviewData := &ReviewData{Event: event}
+		reviewProgress = CreateInitialProgress(reviewData)
+
+		// Check for existing progress comment first
+		existingComment, err := r.githubClient.FindProgressComment(ctx,
+			event.Repository.Owner.Login,
+			event.Repository.Name,
+			event.Number)
+		if err != nil {
+			log.Printf("Warning: failed to check for existing progress comment: %v", err)
+		}
+
+		if existingComment != nil {
+			// Update existing progress comment
+			progressComment = existingComment
+			commentBody := GenerateProgressComment(reviewProgress)
+			_, err = r.githubClient.UpdateIssueComment(ctx,
+				event.Repository.Owner.Login,
+				event.Repository.Name,
+				int(existingComment.ID),
+				commentBody)
+			if err != nil {
+				log.Printf("Warning: failed to update existing progress comment: %v", err)
+			}
+		} else {
+			// Create new progress comment
+			commentBody := GenerateProgressComment(reviewProgress)
+			createdComment, err := r.githubClient.CreateIssueComment(ctx,
+				event.Repository.Owner.Login,
+				event.Repository.Name,
+				event.Number,
+				commentBody)
+			if err != nil {
+				log.Printf("Warning: failed to create progress comment: %v", err)
+			} else {
+				progressComment = createdComment
+			}
+		}
+	}
+
 	workspace, err := r.workspaceManager.CreateWorkspace(ctx, event)
 	if err != nil {
+		// Update progress comment with failure if available
+		if r.githubClient != nil && progressComment != nil && reviewProgress != nil {
+			UpdateProgressStage(reviewProgress, "failed", fmt.Sprintf("Failed to create workspace: %v", err))
+			reviewProgress.Summary = "Review failed during workspace setup"
+			commentBody := GenerateProgressComment(reviewProgress)
+			_, updateErr := r.githubClient.UpdateIssueComment(ctx,
+				event.Repository.Owner.Login,
+				event.Repository.Name,
+				int(progressComment.ID),
+				commentBody)
+			if updateErr != nil {
+				log.Printf("Warning: failed to update progress comment with failure: %v", updateErr)
+			}
+		}
 		result.Status = "failed"
 		return result, fmt.Errorf("failed to create workspace for PR #%d: %w", event.Number, err)
 	}
@@ -121,6 +182,20 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (
 	// Fetch and analyze PR diff if analyzers are available
 	var reviewData *ReviewData
 	if r.diffFetcher != nil && r.codeAnalyzer != nil {
+		// Update progress to analyzing stage
+		if r.githubClient != nil && progressComment != nil && reviewProgress != nil {
+			UpdateProgressStage(reviewProgress, "analyzing", "Analyzing code changes...")
+			commentBody := GenerateProgressComment(reviewProgress)
+			_, updateErr := r.githubClient.UpdateIssueComment(ctx,
+				event.Repository.Owner.Login,
+				event.Repository.Name,
+				int(progressComment.ID),
+				commentBody)
+			if updateErr != nil {
+				log.Printf("Warning: failed to update progress comment to analyzing stage: %v", updateErr)
+			}
+		}
+
 		diffResult, err := r.fetchPRDiff(ctx, event)
 		if err != nil {
 			log.Printf("Warning: failed to fetch PR diff: %v", err)
@@ -156,6 +231,20 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (
 
 	// Send reviewData to LLM for analysis if available
 	if reviewData != nil && r.llmClient != nil {
+		// Update progress to reviewing stage
+		if r.githubClient != nil && progressComment != nil && reviewProgress != nil {
+			UpdateProgressStage(reviewProgress, "reviewing", "Generating review comments...")
+			commentBody := GenerateProgressComment(reviewProgress)
+			_, updateErr := r.githubClient.UpdateIssueComment(ctx,
+				event.Repository.Owner.Login,
+				event.Repository.Name,
+				int(progressComment.ID),
+				commentBody)
+			if updateErr != nil {
+				log.Printf("Warning: failed to update progress comment to reviewing stage: %v", updateErr)
+			}
+		}
+
 		log.Printf("Sending PR #%d to LLM for analysis", event.Number)
 
 		reviewResponse, err := r.performLLMReview(ctx, reviewData)
@@ -181,6 +270,34 @@ func (r *DefaultReviewOrchestrator) HandlePullRequest(event *PullRequestEvent) (
 		}
 	} else if reviewData != nil {
 		log.Printf("Review data prepared for PR #%d (LLM not configured)", event.Number)
+	}
+
+	// Update progress comment with completion status
+	if r.githubClient != nil && progressComment != nil && reviewProgress != nil {
+		UpdateProgressStage(reviewProgress, "completed", "Review completed successfully")
+
+		// Generate summary based on results
+		var summary string
+		if result.CommentsPosted > 0 {
+			if result.CommentsPosted == 1 {
+				summary = "Posted 1 comment"
+			} else {
+				summary = fmt.Sprintf("Posted %d comments", result.CommentsPosted)
+			}
+		} else {
+			summary = "No issues found"
+		}
+		reviewProgress.Summary = summary
+
+		commentBody := GenerateProgressComment(reviewProgress)
+		_, err := r.githubClient.UpdateIssueComment(ctx,
+			event.Repository.Owner.Login,
+			event.Repository.Name,
+			int(progressComment.ID),
+			commentBody)
+		if err != nil {
+			log.Printf("Warning: failed to update final progress comment: %v", err)
+		}
 	}
 
 	log.Printf("Review completed for PR #%d", event.Number)

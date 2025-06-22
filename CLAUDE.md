@@ -93,16 +93,15 @@ git checkout -b docs/update-description
 ```bash
 # Make your changes and commit regularly
 git add .
+
+# MANDATORY: Run Final Verification before committing (see Pre-Commit Quality Verification section)
+# This ensures all formatting, tests, and quality checks pass
+
 git commit -m "feat: implement new feature
 
 - Add specific functionality
 - Update tests and documentation
 - Ensure all tests pass"
-
-# Run tests before committing
-go test ./...
-go fmt ./...
-go vet ./...
 ```
 
 #### 3. Create Pull Request
@@ -117,10 +116,11 @@ gh pr create --title "Add your feature" --body "Description of changes"
 ```
 
 #### 4. Code Review Process
-- Ensure all tests pass
+- **MANDATORY**: Run Final Verification script before creating/updating PR
+- Ensure all tests pass and code quality checks succeed
 - Request review from team members
-- Address feedback and update PR
-- Merge only after approval
+- Address feedback and update PR (re-run verification after changes)
+- Merge only after approval and final verification
 
 #### 5. Cleanup
 ```bash
@@ -148,6 +148,81 @@ Detailed explanation if needed
 ```
 
 Types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`
+
+## Pre-Commit Quality Verification
+
+**MANDATORY**: Before committing any task or changes, you MUST run the Final Verification script to ensure code quality and functionality.
+
+### Final Verification Script
+Always run this comprehensive check before any commit:
+
+```bash
+# Easy to use - just run the verification script
+./scripts/verify.sh
+```
+
+The script performs the following checks:
+1. **📝 Code Formatting**: Ensures all Go code follows standard formatting
+2. **🧪 Test Suite**: Verifies all tests pass
+3. **🔍 Static Analysis**: Runs `go vet` to catch potential issues
+4. **🏗️ Build Verification**: Confirms the project compiles successfully
+5. **📊 Git Status**: Shows current repository state
+6. **📦 Dependency Check**: Ensures dependencies are current and tidy
+
+#### Manual Verification (if script unavailable)
+If the script is not available, run these commands manually:
+
+```bash
+# Check formatting
+gofmt -s -l .
+
+# Run tests  
+go test ./...
+
+# Static analysis
+go vet ./...
+
+# Build check
+go build cmd/agent/main.go
+
+# Dependencies
+go mod tidy
+```
+
+### Quality Requirements
+
+Before any commit, ALL of the following MUST pass:
+
+1. **✅ Code Formatting**: `gofmt -s -l . | wc -l` returns 0
+2. **✅ Test Suite**: `go test ./...` exits with code 0 (all tests pass)
+3. **✅ Static Analysis**: `go vet ./...` exits with code 0 (no issues)
+4. **✅ Build Success**: Code compiles without errors
+
+### Failure Handling
+
+If ANY verification check fails:
+1. **DO NOT COMMIT** until all issues are resolved
+2. Fix formatting with: `gofmt -s -w .`
+3. Fix failing tests by debugging and updating code/tests
+4. Fix vet issues by addressing static analysis warnings
+5. Re-run the verification script until all checks pass
+
+### Integration with Development Workflow
+
+The verification script should be run:
+- ✅ Before every `git commit`
+- ✅ Before pushing to remote (`git push`)
+- ✅ Before creating or updating pull requests
+- ✅ After fixing any CI/CD pipeline failures
+- ✅ As part of local development best practices
+
+### Automation Suggestion
+
+Consider adding this as a git pre-commit hook:
+```bash
+# Save the verification script as .git/hooks/pre-commit
+# Make it executable: chmod +x .git/hooks/pre-commit
+```
 
 ## Architecture Overview
 

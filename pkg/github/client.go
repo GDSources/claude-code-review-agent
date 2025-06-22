@@ -81,6 +81,7 @@ type PullRequestComment struct {
 	User      User   `json:"user"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+	HTMLURL   string `json:"html_url"`
 }
 
 // CommentPostingResult represents the result of batch comment posting
@@ -93,6 +94,16 @@ type CommentPostingResult struct {
 type FailedComment struct {
 	Request CreatePullRequestCommentRequest `json:"request"`
 	Error   string                          `json:"error"`
+}
+
+// IssueComment represents a general comment on an issue/PR (not line-specific)
+type IssueComment struct {
+	ID        int64  `json:"id"`
+	Body      string `json:"body"`
+	User      User   `json:"user"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	HTMLURL   string `json:"html_url"`
 }
 
 func NewClient(token string) *Client {
@@ -474,8 +485,8 @@ type ReviewCommentInput struct {
 
 // ConvertReviewCommentToGitHub converts a ReviewCommentInput to GitHub API format
 func ConvertReviewCommentToGitHub(reviewComment ReviewCommentInput, commitID string) (CreatePullRequestCommentRequest, bool) {
-	// Skip comments without valid line numbers
-	if reviewComment.LineNumber <= 0 {
+	// Skip comments without valid line numbers or empty content
+	if reviewComment.LineNumber <= 0 || strings.TrimSpace(reviewComment.Comment) == "" {
 		return CreatePullRequestCommentRequest{}, false
 	}
 
@@ -486,4 +497,126 @@ func ConvertReviewCommentToGitHub(reviewComment ReviewCommentInput, commitID str
 		Side:     "RIGHT", // Always comment on the new version
 		CommitID: commitID,
 	}, true
+}
+
+// CreateIssueComment creates a general comment on an issue/PR
+func (c *Client) CreateIssueComment(ctx context.Context, owner, repo string, issueNumber int, body string) (*IssueComment, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/comments", c.baseURL, owner, repo, issueNumber)
+
+	requestBody := map[string]string{
+		"body": body,
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(jsonData)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "token "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to create issue comment: HTTP %d - %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var comment IssueComment
+	if err := json.NewDecoder(resp.Body).Decode(&comment); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &comment, nil
+}
+
+// UpdateIssueComment updates an existing issue comment
+func (c *Client) UpdateIssueComment(ctx context.Context, owner, repo string, commentID int, body string) (*IssueComment, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/issues/comments/%d", c.baseURL, owner, repo, commentID)
+
+	requestBody := map[string]string{
+		"body": body,
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PATCH", url, strings.NewReader(string(jsonData)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "token "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to update issue comment: HTTP %d - %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var comment IssueComment
+	if err := json.NewDecoder(resp.Body).Decode(&comment); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &comment, nil
+}
+
+// FindProgressComment finds an existing progress comment by looking for a marker
+func (c *Client) FindProgressComment(ctx context.Context, owner, repo string, issueNumber int) (*IssueComment, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/comments", c.baseURL, owner, repo, issueNumber)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "token "+c.token)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get issue comments: HTTP %d - %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var comments []IssueComment
+	if err := json.NewDecoder(resp.Body).Decode(&comments); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Look for the progress comment marker
+	const progressMarker = "review-agent:progress-comment"
+	for _, comment := range comments {
+		if strings.Contains(comment.Body, progressMarker) {
+			return &comment, nil
+		}
+	}
+
+	// Return nil if no progress comment found (not an error)
+	return nil, nil
 }
