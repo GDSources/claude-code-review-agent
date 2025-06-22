@@ -115,7 +115,7 @@ func (e *EnvLoader) CreateSampleEnvFile() error {
 
 # GitHub Personal Access Token
 # Get from: https://github.com/settings/tokens
-GITHUB_TOKEN=your_github_token_here
+GH_TOKEN=your_github_token_here
 
 # Claude API Key (Anthropic)
 # Get from: https://console.anthropic.com/

@@ -89,7 +89,7 @@ fi
 # Debug: Show environment for troubleshooting
 if [ "$RUNNER_DEBUG" = "1" ]; then
     echo "🔍 Debug: Environment variables"
-    echo "GITHUB_TOKEN: ${GITHUB_TOKEN:0:10}..."
+    echo "GH_TOKEN: ${GH_TOKEN:0:10}..."
     echo "CLAUDE_API_KEY: ${CLAUDE_API_KEY:0:10}..."
     echo "Full command: $REVIEW_CMD"
 fi

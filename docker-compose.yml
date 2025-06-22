@@ -6,7 +6,7 @@ services:
     ports:
       - "${PORT:-8080}:8080"
     environment:
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GH_TOKEN=${GH_TOKEN}
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - PORT=8080
@@ -29,7 +29,7 @@ services:
     ports:
       - "${DEV_PORT:-8081}:8080"
     environment:
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GH_TOKEN=${GH_TOKEN}
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - PORT=8080

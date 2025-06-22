@@ -85,7 +85,7 @@ The application supports multiple configuration methods with the following prece
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `GITHUB_TOKEN` | GitHub Personal Access Token | `ghp_xxxxxxxxxxxx` |
+| `GH_TOKEN` | GitHub Personal Access Token | `ghp_xxxxxxxxxxxx` |
 | `CLAUDE_API_KEY` | Claude API Key from Anthropic | `sk-ant-xxxxxxxxxxxx` |
 | `WEBHOOK_SECRET` | GitHub webhook secret (server mode only) | `your-secret-here` |
 
@@ -245,7 +245,7 @@ make test-coverage
 ### .env File
 ```bash
 # GitHub Personal Access Token
-GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+GH_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
 
 # Claude API Key
 CLAUDE_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxx
@@ -259,7 +259,7 @@ PORT=3000
 
 ### Environment Variables
 ```bash
-export GITHUB_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
+export GH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxx"
 export CLAUDE_API_KEY="sk-ant-xxxxxxxxxxxxxxxxxxxx"
 export WEBHOOK_SECRET="your-webhook-secret-here"
 ```
@@ -294,7 +294,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: your-org/review-agent@v1  # Replace with your action path
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
 ```
 
@@ -340,7 +340,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: your-org/review-agent@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
           claude-model: 'claude-3-7-sonnet-20250109'
           skip-draft: 'false'  # Review draft PRs
@@ -368,7 +368,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: your-org/review-agent@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
           pr-number: ${{ inputs.pr-number }}
 ```
@@ -391,7 +391,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: your-org/review-agent@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
 ```
 
@@ -414,7 +414,7 @@ When using the comment-triggered workflow, you can use these commands in PR comm
 
 - Never commit API keys directly to your repository
 - Use GitHub Secrets for sensitive values
-- The `GITHUB_TOKEN` is automatically provided by GitHub Actions
+- The `GH_TOKEN` is automatically provided by GitHub Actions
 - Review the action's permissions in your workflow
 
 ## GitHub Integration

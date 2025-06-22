@@ -248,7 +248,7 @@ review-docker: ## Run review CLI in Docker
 	else \
 		echo "⚠️  No .env file found, using environment variables"; \
 		docker run --rm \
-			-e GITHUB_TOKEN="$$GITHUB_TOKEN" \
+			-e GH_TOKEN="$$GH_TOKEN" \
 			-e CLAUDE_API_KEY="$$CLAUDE_API_KEY" \
 			review-agent:latest \
 			./review-agent review --owner "$(OWNER)" --repo "$(REPO)" --pr "$(PR)"; \
