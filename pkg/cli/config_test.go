@@ -258,8 +258,8 @@ func TestEnvLoader_CreateSampleEnvFile(t *testing.T) {
 	// Change to temporary directory
 	originalDir, _ := os.Getwd()
 	tempDir := t.TempDir()
-	os.Chdir(tempDir)
-	defer os.Chdir(originalDir)
+	_ = os.Chdir(tempDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	loader := NewEnvLoader()
 

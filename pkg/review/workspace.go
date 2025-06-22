@@ -27,7 +27,7 @@ func (w *DefaultWorkspaceManager) CreateWorkspace(ctx context.Context, event *Pu
 	repoPath := filepath.Join(tempDir, event.Repository.Name)
 
 	if err := w.cloner.CloneRepository(ctx, event.Repository.Owner.Login, event.Repository.Name, repoPath); err != nil {
-		w.fs.RemoveAll(tempDir)
+		_ = w.fs.RemoveAll(tempDir)
 		return nil, fmt.Errorf("failed to clone repository %s/%s: %w",
 			event.Repository.Owner.Login, event.Repository.Name, err)
 	}
@@ -35,7 +35,7 @@ func (w *DefaultWorkspaceManager) CreateWorkspace(ctx context.Context, event *Pu
 	// Checkout the PR branch
 	branchName := event.PullRequest.Head.Ref
 	if err := w.cloner.CheckoutBranch(ctx, repoPath, branchName); err != nil {
-		w.fs.RemoveAll(tempDir)
+		_ = w.fs.RemoveAll(tempDir)
 		return nil, fmt.Errorf("failed to checkout branch %s: %w", branchName, err)
 	}
 

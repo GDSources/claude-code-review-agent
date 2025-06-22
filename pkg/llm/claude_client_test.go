@@ -173,7 +173,7 @@ func TestClaudeClient_ReviewCode(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -280,7 +280,7 @@ func TestClaudeClient_ErrorHandling(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
 				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(tt.responseBody))
+				_, _ = w.Write([]byte(tt.responseBody))
 			}))
 			defer server.Close()
 
@@ -317,7 +317,7 @@ func TestClaudeClient_ContextCancellation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(2 * time.Second)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"content": [], "model": "test", "usage": {"input_tokens": 0, "output_tokens": 0}}`))
+		_, _ = w.Write([]byte(`{"content": [], "model": "test", "usage": {"input_tokens": 0, "output_tokens": 0}}`))
 	}))
 	defer server.Close()
 
@@ -365,7 +365,7 @@ func TestClaudeClient_TokenChunking(t *testing.T) {
 				OutputTokens: 25,
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 

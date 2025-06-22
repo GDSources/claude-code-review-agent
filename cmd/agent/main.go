@@ -502,7 +502,7 @@ func startWebhookServer(config *ServerConfig) error {
 	http.Handle("/webhook", handler)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	addr := fmt.Sprintf(":%d", config.Port)

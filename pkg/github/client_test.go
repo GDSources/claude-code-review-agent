@@ -59,7 +59,7 @@ func TestGetAuthenticatedUser(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(expectedUser)
+		_ = json.NewEncoder(w).Encode(expectedUser)
 	}))
 	defer server.Close()
 
@@ -108,7 +108,7 @@ func TestGetUser(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(expectedUser)
+		_ = json.NewEncoder(w).Encode(expectedUser)
 	}))
 	defer server.Close()
 
@@ -497,7 +497,7 @@ func TestGetPullRequestDiff(t *testing.T) {
 				}
 
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(tt.mockResponse))
+				_, _ = w.Write([]byte(tt.mockResponse))
 			}))
 			defer server.Close()
 
@@ -582,7 +582,7 @@ func TestGetPullRequestFiles(t *testing.T) {
 
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(tt.mockResponse))
+				_, _ = w.Write([]byte(tt.mockResponse))
 			}))
 			defer server.Close()
 
@@ -628,9 +628,9 @@ func TestGetPullRequestDiffWithFiles(t *testing.T) {
 		// Handle both diff and files endpoints
 		if strings.Contains(r.URL.Path, "/files") {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(mockFiles))
+			_, _ = w.Write([]byte(mockFiles))
 		} else if r.Header.Get("Accept") == "application/vnd.github.v3.diff" {
-			w.Write([]byte(mockDiff))
+			_, _ = w.Write([]byte(mockDiff))
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
 		}

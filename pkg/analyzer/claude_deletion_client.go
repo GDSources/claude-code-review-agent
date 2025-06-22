@@ -47,10 +47,6 @@ const (
 type claudeRequest = claude.BaseRequest
 type claudeMessage = claude.Message
 type claudeResponse = claude.BaseResponse
-type claudeContent = claude.Content
-type claudeUsage = claude.Usage
-type claudeError = claude.Error
-type claudeErrorResponse = claude.ErrorResponse
 
 // NewClaudeDeletionClient creates a new Claude client for deletion analysis
 func NewClaudeDeletionClient(config ClaudeAnalyzerConfig) (*ClaudeDeletionClient, error) {
