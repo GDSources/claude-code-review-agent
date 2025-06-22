@@ -48,8 +48,20 @@ fi
 
 echo ""
 
-# Check 4: Build Verification
-echo "4. 🏗️  Build Verification:"
+# Check 4: golangci-lint
+echo "4. 🔧 Comprehensive Linting (golangci-lint):"
+if $(go env GOPATH)/bin/golangci-lint run >/dev/null 2>&1; then
+  echo "✅ golangci-lint passes - no issues found"
+else
+  echo "❌ golangci-lint found issues:"
+  $(go env GOPATH)/bin/golangci-lint run
+  exit 1
+fi
+
+echo ""
+
+# Check 5: Build Verification
+echo "5. 🏗️  Build Verification:"
 if go build -o /tmp/review-agent-test cmd/agent/main.go >/dev/null 2>&1; then
   echo "✅ Project builds successfully"
   rm -f /tmp/review-agent-test
@@ -61,8 +73,8 @@ fi
 
 echo ""
 
-# Check 5: Git Status
-echo "5. 📊 Git Status:"
+# Check 6: Git Status
+echo "6. 📊 Git Status:"
 if git status --porcelain | grep -q .; then
   echo "ℹ️  Uncommitted changes present:"
   git status --short
@@ -74,8 +86,8 @@ fi
 
 echo ""
 
-# Check 6: Dependency Check
-echo "6. 📦 Dependency Check:"
+# Check 7: Dependency Check
+echo "7. 📦 Dependency Check:"
 go mod tidy >/dev/null 2>&1
 if git diff --quiet go.mod 2>/dev/null && (! git ls-files --error-unmatch go.sum >/dev/null 2>&1 || git diff --quiet go.sum 2>/dev/null); then
   echo "✅ Dependencies are up to date"
@@ -91,6 +103,7 @@ echo "✅ Code is ready for commit"
 echo "✅ Formatting is correct"  
 echo "✅ All tests pass"
 echo "✅ Static analysis clean"
+echo "✅ Comprehensive linting clean"
 echo "✅ Build successful"
 echo ""
 echo "🚀 You can now safely commit your changes!"
