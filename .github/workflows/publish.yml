@@ -55,8 +55,9 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -65,6 +66,7 @@ jobs:
       - name: Test Docker image
         if: github.event_name == 'pull_request'
         run: |
-          # Extract the first tag for testing
+          # Extract the first tag for testing (image is loaded locally)
           TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          echo "Testing locally built image: $TAG"
           docker run --rm $TAG ./review-agent version
