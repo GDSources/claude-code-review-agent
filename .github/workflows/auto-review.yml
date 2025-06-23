@@ -19,9 +19,12 @@ jobs:
       !contains(github.event.pull_request.labels.*.name, 'wip')
     
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
       - name: Run Code Review Agent
         id: review
-        uses: gdsources/claude-code-review-agent@v1
+        uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
