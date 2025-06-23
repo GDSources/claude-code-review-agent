@@ -1,0 +1,80 @@
+# Comment-Triggered Code Review
+# Triggers review when specific comments are posted on PRs
+
+name: Comment-Triggered Review
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  comment-review:
+    # Only run on pull request comments containing '/review'
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/review') &&
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'MEMBER' ||
+       github.event.comment.author_association == 'COLLABORATOR')
+    
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    
+    steps:
+      - name: Parse Review Command
+        id: parse
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          
+          # Extract model if specified
+          MODEL=$(echo "$COMMENT" | grep -oP 'model:\K[^\s]+' || echo 'claude-sonnet-4-20250514')
+          echo "model=$MODEL" >> $GITHUB_OUTPUT
+          
+          # Extract paths if specified
+          PATHS=$(echo "$COMMENT" | grep -oP 'paths:\K[^\s]+' || echo '')
+          echo "paths=$PATHS" >> $GITHUB_OUTPUT
+          
+          # Check for force flag
+          FORCE=$(echo "$COMMENT" | grep -q '\--force' && echo 'true' || echo 'false')
+          echo "force=$FORCE" >> $GITHUB_OUTPUT
+          
+          echo "Parsed command - Model: $MODEL, Paths: $PATHS, Force: $FORCE"
+
+      - name: React to Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'rocket'
+            });
+
+      - name: Comment-Triggered AI Review
+        uses: gdormoy/review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          claude-model: ${{ steps.parse.outputs.model }}
+          pr-number: ${{ github.event.issue.number }}
+          review-paths: ${{ steps.parse.outputs.paths }}
+          skip-draft: ${{ steps.parse.outputs.force == 'true' && 'false' || 'true' }}
+          skip-labels: ${{ steps.parse.outputs.force == 'true' && '' || 'skip-review,wip' }}
+
+      - name: Comment Result
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const emoji = status === 'success' ? '✅' : '❌';
+            const message = `${emoji} Code review ${status === 'success' ? 'completed' : 'failed'}`;
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: message
+            });

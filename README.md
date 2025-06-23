@@ -275,7 +275,7 @@ export WEBHOOK_SECRET="your-webhook-secret-here"
 
 ## GitHub Action Usage
 
-The review agent is available as a GitHub Action for easy integration into your workflows.
+The review agent is available as a GitHub Action for easy integration into your workflows. The action uses a pre-built Docker container for fast execution and reliability.
 
 ### Quick Start
 
@@ -290,13 +290,17 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: your-org/review-agent@v1  # Replace with your action path
+      - uses: gdormoy/review-agent@v1
         with:
-          github-token: ${{ secrets.GH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
 ```
+
+> **Note**: Replace `gdormoy/review-agent@v1` with the actual path to this action once published.
 
 ### Action Inputs
 
@@ -338,9 +342,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: your-org/review-agent@v1
+      - uses: gdormoy/review-agent@v1
         with:
-          github-token: ${{ secrets.GH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
           claude-model: 'claude-3-7-sonnet-20250109'
           skip-draft: 'false'  # Review draft PRs
@@ -366,9 +370,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: your-org/review-agent@v1
+      - uses: gdormoy/review-agent@v1
         with:
-          github-token: ${{ secrets.GH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
           pr-number: ${{ inputs.pr-number }}
 ```
@@ -389,9 +393,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: your-org/review-agent@v1
+      - uses: gdormoy/review-agent@v1
         with:
-          github-token: ${{ secrets.GH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
 ```
 
@@ -409,6 +413,56 @@ When using the comment-triggered workflow, you can use these commands in PR comm
 1. **Add Secrets**: In your repository settings, add the `CLAUDE_API_KEY` secret
 2. **Create Workflow**: Add one of the example workflows above to `.github/workflows/`
 3. **Customize**: Adjust the configuration to match your needs
+
+### Using in Other Repositories
+
+To use this review agent in any GitHub repository:
+
+1. **No Installation Required**: The action uses a pre-built Docker container from GitHub Container Registry
+2. **Fast Execution**: No build time - the container is already optimized and ready to use
+3. **Simply Reference**: Use `gdormoy/review-agent@v1` in your workflow
+
+**Example for any Go project:**
+```yaml
+name: AI Code Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: gdormoy/review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          review-paths: '**/*.go'
+          exclude-paths: 'vendor/**,**/*_test.go'
+```
+
+**Example for any JavaScript/TypeScript project:**
+```yaml
+name: AI Code Review
+on: [pull_request]
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: gdormoy/review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          review-paths: 'src/**/*.{js,ts,jsx,tsx}'
+          exclude-paths: 'node_modules/**,dist/**,build/**'
+```
 
 ### Security Considerations
 

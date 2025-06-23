@@ -1,0 +1,47 @@
+# Manual Code Review Trigger
+# Allows manual triggering of code reviews for specific PRs
+
+name: Manual Code Review
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: 'Pull Request number to review'
+        required: true
+        type: number
+      claude-model:
+        description: 'Claude model to use'
+        required: false
+        default: 'claude-sonnet-4-20250514'
+        type: choice
+        options:
+          - 'claude-sonnet-4-20250514'
+          - 'claude-3-7-sonnet-20250109'
+          - 'claude-3-7-haiku-20250109'
+      paths:
+        description: 'Specific paths to review (optional)'
+        required: false
+        type: string
+      force-review:
+        description: 'Force review even if draft or has skip labels'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  manual-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Manual AI Code Review
+        uses: gdormoy/review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          claude-model: ${{ inputs.claude-model }}
+          pr-number: ${{ inputs.pr-number }}
+          review-paths: ${{ inputs.paths }}
+          skip-draft: ${{ inputs.force-review == false }}
+          skip-labels: ${{ inputs.force-review == true && '' || 'skip-review,wip,draft' }}

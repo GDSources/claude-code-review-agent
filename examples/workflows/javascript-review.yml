@@ -1,0 +1,31 @@
+# JavaScript/TypeScript Project Review
+# Optimized for Node.js, React, and other JavaScript frameworks
+
+name: JavaScript Code Review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/**'
+      - 'lib/**'
+      - 'components/**'
+      - '**/*.{js,jsx,ts,tsx}'
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: AI Code Review for JavaScript
+        uses: gdormoy/review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          claude-model: 'claude-sonnet-4-20250514'
+          review-paths: 'src/**/*.{js,jsx,ts,tsx},lib/**/*.{js,ts},components/**/*.{js,jsx,ts,tsx}'
+          exclude-paths: 'node_modules/**,dist/**,build/**,coverage/**,**/*.test.{js,ts},**/*.spec.{js,ts}'
+          comment-threshold: '0.7'
+          skip-draft: 'false'  # Review draft PRs for JS projects
+          skip-labels: 'skip-review,dependencies'
