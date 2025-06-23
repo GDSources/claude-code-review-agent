@@ -21,14 +21,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          # Fetch full history for better context
-          fetch-depth: 0
-      
+        
       - name: Run Code Review Agent
         id: review
-        uses: ./  # Use this repository's action
-        # For external usage, replace with: uses: your-org/review-agent@v1
+        uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}

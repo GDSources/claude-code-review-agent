@@ -1,0 +1,129 @@
+# Advanced Configuration Example
+# Demonstrates all available features and configuration options
+
+name: Advanced Code Review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/**'
+      - 'lib/**'
+      - 'pkg/**'
+      - '**/*.go'
+      - '**/*.js'
+      - '**/*.ts'
+
+env:
+  # Environment-specific configuration
+  CLAUDE_MODEL: ${{ github.event.pull_request.draft && 'claude-3-7-haiku-20250109' || 'claude-sonnet-4-20250514' }}
+
+jobs:
+  advanced-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write  # For status checks
+    
+    steps:
+      - name: Check PR Size
+        id: pr-size
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            
+            const changes = pr.additions + pr.deletions;
+            const size = changes > 500 ? 'large' : changes > 100 ? 'medium' : 'small';
+            
+            console.log(`PR size: ${size} (${changes} changes)`);
+            return size;
+
+      - name: Advanced AI Code Review
+        uses: gdsources/claude-code-review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          
+          # Dynamic model selection based on PR characteristics
+          claude-model: ${{ 
+            steps.pr-size.outputs.result == 'large' && 'claude-sonnet-4-20250514' ||
+            github.event.pull_request.draft && 'claude-3-7-haiku-20250109' ||
+            'claude-3-7-sonnet-20250109'
+          }}
+          
+          # Comprehensive path filtering
+          review-paths: |
+            src/**/*.{go,js,ts,jsx,tsx}
+            lib/**/*.{go,js,ts}
+            pkg/**/*.go
+            cmd/**/*.go
+            **/*.sql
+            **/*.py
+          
+          exclude-paths: |
+            vendor/**
+            node_modules/**
+            dist/**
+            build/**
+            coverage/**
+            **/*_test.go
+            **/*.test.{js,ts}
+            **/*.spec.{js,ts}
+            **/*.mock.{go,js,ts}
+            **/testdata/**
+            **/*.generated.{go,js,ts}
+            
+          # Dynamic threshold based on PR size
+          comment-threshold: ${{ 
+            steps.pr-size.outputs.result == 'large' && '0.8' ||
+            steps.pr-size.outputs.result == 'medium' && '0.7' ||
+            '0.6'
+          }}
+          
+          # Smart draft handling
+          skip-draft: ${{ github.event.action != 'ready_for_review' }}
+          
+          # Comprehensive skip labels
+          skip-labels: |
+            skip-review
+            wip
+            work-in-progress
+            dependencies
+            auto-merge
+            hotfix
+            
+      - name: Create Review Summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const prSize = '${{ steps.pr-size.outputs.result }}';
+            const model = '${{ env.CLAUDE_MODEL }}';
+            
+            const summary = `
+            ## 🤖 AI Code Review Summary
+            
+            - **Status**: ${status === 'success' ? '✅ Completed' : '❌ Failed'}
+            - **PR Size**: ${prSize}
+            - **Model Used**: ${model}
+            - **Review Scope**: Focused on core application files
+            
+            ${status === 'success' ? 
+              'Review comments have been posted where improvements are suggested.' :
+              'Review failed - please check the workflow logs for details.'
+            }
+            `;
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
+            });

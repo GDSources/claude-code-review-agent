@@ -1,0 +1,30 @@
+# Go Project Code Review
+# Optimized workflow for Go projects with common patterns
+
+name: Go Code Review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: AI Code Review for Go
+        uses: gdsources/claude-code-review-agent@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          claude-model: 'claude-sonnet-4-20250514'
+          review-paths: '**/*.go,go.mod'
+          exclude-paths: 'vendor/**,**/*_test.go,**/testdata/**'
+          comment-threshold: '0.8'
+          skip-draft: 'true'
+          skip-labels: 'skip-review,wip,draft'
