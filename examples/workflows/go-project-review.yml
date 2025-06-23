@@ -18,7 +18,7 @@ jobs:
       pull-requests: write
     steps:
       - name: AI Code Review for Go
-        uses: gdormoy/review-agent@v1
+        uses: gdsources/claude-code-review-agent@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}

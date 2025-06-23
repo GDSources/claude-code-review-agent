@@ -294,13 +294,13 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: gdormoy/review-agent@v1
+      - uses: gdsources/claude-code-review-agent@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
 ```
 
-> **Note**: Replace `gdormoy/review-agent@v1` with the actual path to this action once published.
+> **Note**: Replace `gdsources/claude-code-review-agent@v1` with the actual path to this action once published.
 
 ### Action Inputs
 
@@ -342,7 +342,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: gdormoy/review-agent@v1
+      - uses: gdsources/claude-code-review-agent@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
@@ -370,7 +370,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: gdormoy/review-agent@v1
+      - uses: gdsources/claude-code-review-agent@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
@@ -393,7 +393,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: gdormoy/review-agent@v1
+      - uses: gdsources/claude-code-review-agent@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
@@ -420,7 +420,7 @@ To use this review agent in any GitHub repository:
 
 1. **No Installation Required**: The action uses a pre-built Docker container from GitHub Container Registry
 2. **Fast Execution**: No build time - the container is already optimized and ready to use
-3. **Simply Reference**: Use `gdormoy/review-agent@v1` in your workflow
+3. **Simply Reference**: Use `gdsources/claude-code-review-agent@v1` in your workflow
 
 **Example for any Go project:**
 ```yaml
@@ -436,7 +436,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: gdormoy/review-agent@v1
+      - uses: gdsources/claude-code-review-agent@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
@@ -456,7 +456,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: gdormoy/review-agent@v1
+      - uses: gdsources/claude-code-review-agent@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}

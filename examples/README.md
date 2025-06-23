@@ -14,7 +14,7 @@ The simplest possible configuration for automated code reviews on pull requests.
 **Best for:** Small projects, getting started, minimal configuration
 
 ```yaml
-- uses: gdormoy/review-agent@v1
+- uses: gdsources/claude-code-review-agent@v1
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     claude-api-key: ${{ secrets.CLAUDE_API_KEY }}

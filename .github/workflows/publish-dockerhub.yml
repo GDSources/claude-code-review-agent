@@ -11,7 +11,7 @@ on:
         default: 'latest'
 
 env:
-  DOCKERHUB_IMAGE: gdormoy/review-agent
+  DOCKERHUB_IMAGE: gdsources/claude-code-review-agent
 
 jobs:
   publish-dockerhub:

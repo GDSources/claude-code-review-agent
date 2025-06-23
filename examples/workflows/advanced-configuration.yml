@@ -45,7 +45,7 @@ jobs:
             return size;
 
       - name: Advanced AI Code Review
-        uses: gdormoy/review-agent@v1
+        uses: gdsources/claude-code-review-agent@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
